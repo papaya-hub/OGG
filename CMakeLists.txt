@@ -41,11 +41,14 @@ target_include_directories(ogg.server PRIVATE
 )
 
 # Target-specific platform includes
-if(WIN32)
-    target_include_directories(ogg.server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/win32)
+string(TOLOWER "${CMAKE_CXX_COMPILER}" _ogg_cxx_compiler)
+if(WIN32 OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR _ogg_cxx_compiler MATCHES "ucrt64|mingw64|mingw32|w64-mingw32")
+    target_include_directories(ogg.server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/win)
     target_link_libraries(ogg.server PRIVATE ws2_32)
+    message(STATUS "ogg.server: Windows/MinGW toolchain (_WIN32)")
 else()
     target_include_directories(ogg.server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/nix)
+    message(STATUS "ogg.server: POSIX toolchain (nix)")
 endif()
 
 # Add post-build rule to copy public_html next to the executable

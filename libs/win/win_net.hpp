@@ -1,5 +1,5 @@
-#ifndef OGG_WIN32_NET_HPP
-#define OGG_WIN32_NET_HPP
+#ifndef OGG_WIN_NET_HPP
+#define OGG_WIN_NET_HPP
 
 #ifndef WIN32_LEAN_AND_MEAN
     #define WIN32_LEAN_AND_MEAN
@@ -219,4 +219,4 @@ inline void run_ipc_listener(CommandCallback callback) {
 
 } // namespace ogg::net
 
-#endif // OGG_WIN32_NET_HPP
+#endif // OGG_WIN_NET_HPP

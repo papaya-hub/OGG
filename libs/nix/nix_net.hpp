@@ -3,7 +3,10 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#if defined(__linux__)
 #include <sys/epoll.h>
+#endif
+#include <poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -67,7 +70,16 @@ inline Socket bind_and_listen(unsigned short port, int backlog = 128) {
     return server_fd;
 }
 
-// C10K epoll Event Loop
+namespace detail {
+
+inline const char kDefaultHttpResponse[] =
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 10\r\n"
+    "Connection: close\r\n\r\n"
+    "OGG.Server";
+
+#if defined(__linux__)
 inline void run_epoll_event_loop(Socket server_fd) {
     int epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
@@ -87,40 +99,31 @@ inline void run_epoll_event_loop(Socket server_fd) {
     constexpr int MAX_EVENTS = 1024;
     epoll_event events[MAX_EVENTS];
 
-    const char response[] =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: 10\r\n"
-        "Connection: close\r\n\r\n"
-        "OGG.Server";
-
     std::puts("epoll Event Loop running...");
 
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         for (int i = 0; i < nfds; ++i) {
             if (events[i].data.fd == server_fd) {
-                // Accept new connections
                 while (true) {
                     sockaddr_in client_addr{};
                     socklen_t client_len = sizeof(client_addr);
                     Socket client_fd = accept(server_fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
 
-                    if (client_fd == InvalidSocket) break; // EWOULDBLOCK / EAGAIN
+                    if (client_fd == InvalidSocket) break;
 
                     set_non_blocking(client_fd);
                     epoll_event client_ev{};
-                    client_ev.events = EPOLLIN | EPOLLET; // Edge-triggered for C10K efficiency
+                    client_ev.events = EPOLLIN | EPOLLET;
                     client_ev.data.fd = client_fd;
                     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &client_ev);
                 }
             } else {
-                // Read from client socket
                 Socket client_fd = events[i].data.fd;
                 char buf[1024];
                 int bytes = recv(client_fd, buf, sizeof(buf), 0);
                 if (bytes > 0) {
-                    send(client_fd, response, sizeof(response) - 1, 0);
+                    send(client_fd, kDefaultHttpResponse, sizeof(kDefaultHttpResponse) - 1, 0);
                 }
                 epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, nullptr);
                 close_socket(client_fd);
@@ -129,6 +132,68 @@ inline void run_epoll_event_loop(Socket server_fd) {
     }
 
     close(epoll_fd);
+}
+#else
+inline void run_poll_event_loop(Socket server_fd) {
+    constexpr int MAX_POLL_FDS = 1024;
+    pollfd fds[MAX_POLL_FDS]{};
+    int fd_count = 0;
+
+    fds[fd_count].fd = server_fd;
+    fds[fd_count].events = POLLIN;
+    ++fd_count;
+
+    std::puts("poll Event Loop running...");
+
+    while (true) {
+        if (poll(fds, fd_count, -1) <= 0) {
+            continue;
+        }
+
+        for (int i = 0; i < fd_count; ++i) {
+            if (!(fds[i].events & POLLIN)) {
+                continue;
+            }
+
+            if (fds[i].fd == server_fd) {
+                while (true) {
+                    sockaddr_in client_addr{};
+                    socklen_t client_len = sizeof(client_addr);
+                    Socket client_fd = accept(server_fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+
+                    if (client_fd == InvalidSocket) break;
+
+                    set_non_blocking(client_fd);
+                    fds[fd_count].fd = client_fd;
+                    fds[fd_count].events = POLLIN;
+                    ++fd_count;
+                }
+            } else {
+                Socket client_fd = fds[i].fd;
+                char buf[1024];
+                int bytes = recv(client_fd, buf, sizeof(buf), 0);
+                if (bytes > 0) {
+                    send(client_fd, kDefaultHttpResponse, sizeof(kDefaultHttpResponse) - 1, 0);
+                }
+                close_socket(client_fd);
+                fds[i] = fds[fd_count - 1];
+                --fd_count;
+                --i;
+            }
+        }
+    }
+}
+#endif
+
+} // namespace detail
+
+// C10K epoll Event Loop (poll fallback on Cygwin/macOS)
+inline void run_epoll_event_loop(Socket server_fd) {
+#if defined(__linux__)
+    detail::run_epoll_event_loop(server_fd);
+#else
+    detail::run_poll_event_loop(server_fd);
+#endif
 }
 
 inline Socket bind_and_listen_udp(unsigned short port) {
