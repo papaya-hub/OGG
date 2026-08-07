@@ -1,0 +1,9 @@
+#pragma once
+
+namespace ogg {
+
+inline constexpr const char* VERSION = "@OGG_VERSION@";
+inline constexpr const char* CLIENT_EXE_NAME = "@OGG_CLIENT_EXE_NAME@";
+inline constexpr const char* CLIENT_PATCH_NAME = "@OGG_CLIENT_PATCH_NAME@";
+
+} // namespace ogg

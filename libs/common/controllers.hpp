@@ -15,6 +15,8 @@
 #include <string_view>
 #include <span>
 #include <cstdint>
+#include <filesystem>
+#include <string>
 
 namespace ogg::net {
 
@@ -28,6 +30,7 @@ struct HttpResponse {
     int status_code = 200;
     std::string_view content_type = "text/plain";
     std::string_view body;
+    std::filesystem::path file_path;
 };
 
 #pragma pack(push, 1)

@@ -1,0 +1,148 @@
+#if defined(_WIN32)
+
+#include "widgets.hpp"
+#include "colors.hpp"
+#include "window.hpp"
+
+namespace ogg::ui {
+
+D2D1_RECT_F title_close_rect(float width) {
+    return D2D1::RectF(
+        width - kTitleCloseMargin - kTitleCloseBtnW,
+        kTitleCloseMargin,
+        width - kTitleCloseMargin,
+        kTitleCloseMargin + kTitleCloseBtnH
+    );
+}
+
+D2D1_RECT_F client_title_close_rect(float width) {
+    return D2D1::RectF(width - kTitleCloseBtnW, 0.f, width, kTitleBarHeight);
+}
+
+D2D1_RECT_F client_title_minimize_rect(float width) {
+    return D2D1::RectF(width - (kTitleCloseBtnW * 2.f), 0.f, width - kTitleCloseBtnW, kTitleBarHeight);
+}
+
+D2D1_RECT_F action_button_rect(float width, float height, int index, int button_count) {
+    const float total_w = static_cast<float>(button_count) * kActionButtonW +
+        static_cast<float>(button_count - 1) * kActionButtonGap;
+    const float start_x = (width - total_w) / 2.f;
+    const float top = height - kActionButtonH - 14.f;
+    const float left = start_x + static_cast<float>(index) * (kActionButtonW + kActionButtonGap);
+    return D2D1::RectF(left, top, left + kActionButtonW, top + kActionButtonH);
+}
+
+bool point_in_rect(const POINT& pt, const D2D1_RECT_F& rect) {
+    return static_cast<float>(pt.x) >= rect.left &&
+           static_cast<float>(pt.x) <= rect.right &&
+           static_cast<float>(pt.y) >= rect.top &&
+           static_cast<float>(pt.y) <= rect.bottom;
+}
+
+void paint_shell(ID2D1HwndRenderTarget* target, const RenderContext& ctx, const ShellView& view, float width, float height) {
+    const auto& brushes = ctx.brushes();
+    const ShellTheme theme = ctx.theme();
+
+    target->Clear(background_color(theme));
+
+    D2D1_ROUNDED_RECT panel{
+        D2D1::RectF(0.f, 0.f, width, height),
+        kCornerRadius,
+        kCornerRadius,
+    };
+    target->FillRoundedRectangle(panel, brushes.background);
+
+    if (!view.minimal_chrome) {
+        const D2D1_RECT_F close_rect = title_close_rect(width);
+        target->FillRectangle(close_rect, brushes.danger);
+        target->DrawText(
+            L"\u00D7",
+            1,
+            ctx.close_text_format(),
+            close_rect,
+            brushes.button_on_danger_text
+        );
+    }
+
+    if (!view.minimal_chrome) {
+        const float text_bottom = view.show_buttons ? height - 58.f : height - 52.f;
+        D2D1_RECT_F text_rect{
+            24.f,
+            kTitleBarHeight + 4.f,
+            width - 24.f,
+            text_bottom,
+        };
+        target->DrawText(
+            view.status_text.c_str(),
+            static_cast<UINT32>(view.status_text.size()),
+            ctx.text_format(),
+            text_rect,
+            brushes.text
+        );
+
+        if (view.progress >= 0) {
+            const float bar_bottom = view.show_buttons ? height - 52.f : height - 20.f;
+            const float bar_top = bar_bottom - kProgressBarHeight;
+            const float bar_left = 32.f;
+            const float bar_right = width - 32.f;
+            const float bar_width = bar_right - bar_left;
+
+            wchar_t percent_text[16]{};
+            swprintf(percent_text, 16, L"%d%%", view.progress);
+            D2D1_RECT_F percent_rect{
+                bar_left,
+                bar_top - kPercentLabelGap - kPercentLabelHeight,
+                bar_right,
+                bar_top - kPercentLabelGap,
+            };
+            target->DrawText(
+                percent_text,
+                static_cast<UINT32>(wcslen(percent_text)),
+                ctx.percent_text_format(),
+                percent_rect,
+                brushes.text
+            );
+
+            D2D1_ROUNDED_RECT track{
+                D2D1::RectF(bar_left, bar_top, bar_right, bar_bottom),
+                kProgressBarCornerRadius,
+                kProgressBarCornerRadius,
+            };
+            target->FillRoundedRectangle(track, brushes.progress_track);
+
+            const float fill_right = bar_left + bar_width * (static_cast<float>(view.progress) / 100.f);
+            if (fill_right > bar_left) {
+                D2D1_ROUNDED_RECT fill{
+                    D2D1::RectF(bar_left, bar_top, fill_right, bar_bottom),
+                    kProgressBarCornerRadius,
+                    kProgressBarCornerRadius,
+                };
+                target->FillRoundedRectangle(fill, brushes.primary);
+            }
+        }
+
+        if (view.show_buttons && view.button_count > 0) {
+            for (int i = 0; i < view.button_count; ++i) {
+                const D2D1_RECT_F btn_rect = action_button_rect(width, height, i, view.button_count);
+                D2D1_ROUNDED_RECT round_rect{
+                    btn_rect,
+                    kActionButtonRadius,
+                    kActionButtonRadius,
+                };
+                const ButtonStyle style = view.buttons[i].style;
+                target->FillRoundedRectangle(round_rect, ctx.brush_for_button_style(style));
+                target->DrawText(
+                    view.buttons[i].label.c_str(),
+                    static_cast<UINT32>(view.buttons[i].label.size()),
+                    ctx.button_text_format(),
+                    btn_rect,
+                    ctx.brush_for_button_text(style)
+                );
+            }
+        }
+    }
+}
+
+} // namespace ogg::ui
+
+#endif

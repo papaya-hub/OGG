@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OGG Client</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: "Segoe UI", system-ui, sans-serif; }
+    .shell {
+      display: flex;
+      height: 100%;
+      min-height: 100%;
+      align-items: stretch;
+    }
+    .login-panel {
+      width: 320px;
+      flex-shrink: 0;
+      background: #ffffff;
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      border-right: 1px solid #e8e8e8;
+    }
+    .login-panel h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .login-panel p {
+      font-size: 0.875rem;
+      color: #5a5a5a;
+      line-height: 1.4;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #333;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .field input {
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid #c8c8c8;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .field input:focus {
+      outline: 2px solid rgba(89, 191, 255, 0.45);
+      border-color: #59bfff;
+    }
+    .btn-primary {
+      margin-top: 8px;
+      height: 38px;
+      border: none;
+      border-radius: 6px;
+      background: #59bfff;
+      color: #0d1117;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: #4aaef0; }
+    .hero {
+      flex: 1;
+      min-width: 0;
+      align-self: stretch;
+      min-height: 100%;
+      background: #2a3340 url("client.jpg") center center / cover no-repeat;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="login-panel">
+      <h1>Sign in</h1>
+      <p>Welcome to OffGrid Games. Enter your credentials to continue.</p>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="you@example.com" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" type="button">Log in</button>
+    </aside>
+    <main class="hero" aria-label="Game art"></main>
+  </div>
+</body>
+</html>
