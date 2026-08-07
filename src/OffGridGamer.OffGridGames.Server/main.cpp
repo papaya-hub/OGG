@@ -1,4 +1,7 @@
 #include <cstdio>
+#include <cstring>
+#include <thread>
+#include "controllers.hpp"
 
 #if defined(_WIN32)
     #include "win32_net.hpp"
@@ -6,46 +9,78 @@
     #include "nix_net.hpp"
 #endif
 
-int main() {
-    ogg::net::PlatformContext net_env;
-    constexpr unsigned short PORT = 8123;
+#include "http_server.cpp"
 
-    ogg::net::Socket server_fd = ogg::net::bind_and_listen(PORT);
-    if (server_fd == ogg::net::InvalidSocket) {
-        return 1;
-    }
+namespace controllers = ogg::controllers;
 
-    std::printf("Server listening on port %d...\n", PORT);
+int main(int argc, char* argv[]) {
+    // 1. Check CLI Flags (e.g., ogg.server.exe -s reload)
+    if (argc >= 3 && std::strcmp(argv[1], "-s") == 0) {
+        const char* signal_cmd = argv[2];
 
-    // Connection Accept Loop
-    while (true) {
-        sockaddr_in client_addr{};
-        socklen_t client_len = sizeof(client_addr);
-        ogg::net::Socket client_fd = accept(server_fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
-
-        if (client_fd != ogg::net::InvalidSocket) {
-            char ip_str[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &(client_addr.sin_addr), ip_str, INET_ADDRSTRLEN);
-            // std::printf("Client connected from %s\n", ip_str);
-
-            char recv_buf[1024];
-            int bytes_received = recv(client_fd, recv_buf, sizeof(recv_buf) - 1, 0);
-
-            if (bytes_received > 0) {
-                const char response[] =
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "Content-Length: 10\r\n"
-                    "Connection: close\r\n\r\n"
-                    "OGG.Server";
-
-                send(client_fd, response, static_cast<int>(sizeof(response) - 1), 0);
+        if (std::strcmp(signal_cmd, "reload") == 0) {
+            std::puts("[CLI] Requesting server reload...");
+            if (ogg::net::send_ipc_command("RELOAD")) {
+                std::puts("[CLI] Reload signal sent successfully.");
+            } else {
+                std::puts("[CLI] Error: Could not connect to running OGG.Server instance.");
+                return 1;
             }
-
-            ogg::net::close_socket(client_fd);
+            return 0; // Exit CLI command process
+        } else {
+            std::printf("[CLI] Unknown signal: %s\n", signal_cmd);
+            return 1;
         }
     }
 
-    ogg::net::close_socket(server_fd);
+    // 2. Start Primary Server Process
+    ogg::net::PlatformContext net_env;
+
+    // Load web assets on initial boot
+    controllers::load_web_assets();
+
+    constexpr unsigned short HTTP_PORT = 8123;
+    constexpr unsigned short TCP_PORT  = 8124;
+    constexpr unsigned short UDP_PORT  = 8125;
+
+    ogg::net::Socket http_fd = ogg::net::bind_and_listen(HTTP_PORT);
+    ogg::net::Socket tcp_fd  = ogg::net::bind_and_listen(TCP_PORT);
+    ogg::net::Socket udp_fd  = ogg::net::bind_and_listen_udp(UDP_PORT);
+
+    if (http_fd == ogg::net::InvalidSocket ||
+        tcp_fd == ogg::net::InvalidSocket ||
+        udp_fd == ogg::net::InvalidSocket) {
+        std::puts("Failed to bind server ports.");
+        return 1;
+    }
+
+    // 3. Launch IPC Signal Listener Thread
+    std::thread ipc_thread([]() {
+        ogg::net::run_ipc_listener([](const char* cmd) {
+            if (std::strcmp(cmd, "RELOAD") == 0) {
+                std::puts("[SERVER] Received RELOAD signal. Reloading web assets and configs...");
+                controllers::load_web_assets();
+            }
+        });
+    });
+    ipc_thread.detach();
+
+    std::printf("[HTTP] Web Server listening on port %d\n", HTTP_PORT);
+    std::printf("[TCP]  Game Server listening on port %d\n", TCP_PORT);
+    std::printf("[UDP]  Sync Server listening on port %d\n", UDP_PORT);
+
+    // 4. Launch Service Threads
+    // Run HTTP Listener on dedicated thread
+    std::thread http_thread([http_fd]() {
+        run_http_server(http_fd);
+    });
+
+    std::thread udp_thread([udp_fd]() {
+        ogg::net::run_udp_receiver(udp_fd, controllers::handle_udp_datagram);
+    });
+
+    http_thread.join();
+    udp_thread.join();
+
     return 0;
 }
