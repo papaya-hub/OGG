@@ -69,6 +69,20 @@ static fs::path find_local_client_match(const fs::path& client_dir, const std::s
     return {};
 }
 
+static fs::path resolve_client_path(const fs::path& client_dir, const std::string& remote_base) {
+    const fs::path adjacent = get_exe_directory() / remote_base;
+    if (fs::is_regular_file(adjacent)) {
+        return adjacent;
+    }
+
+    const fs::path cached = find_local_client_match(client_dir, remote_base);
+    if (!cached.empty()) {
+        return cached;
+    }
+
+    return client_dir / remote_base;
+}
+
 static void status(ogg::launcher::LauncherUi& ui, int percent, const std::string& message) {
     ui.set_ellipsis_dots(0);
     ui.set_progress(percent);
@@ -117,31 +131,22 @@ static bool probe_host_with_connecting_animation(
     const wchar_t* host,
     std::uint16_t port,
     int& patch_status,
-    std::vector<std::uint8_t>& patch_body,
-    int& client_status,
-    std::vector<std::uint8_t>& client_body
+    std::vector<std::uint8_t>& patch_body
 ) {
-    std::atomic<int> pending{2};
+    std::atomic<bool> done{false};
     bool patch_ok = false;
-    bool client_ok = false;
 
     std::thread patch_worker([&] {
         patch_ok = ogg::http_client::http_get(host, port, L"/api/ogg/patch", patch_status, patch_body);
-        pending.fetch_sub(1, std::memory_order_release);
-    });
-
-    std::thread client_worker([&] {
-        client_ok = ogg::http_client::http_get(host, port, L"/client", client_status, client_body);
-        pending.fetch_sub(1, std::memory_order_release);
+        done.store(true, std::memory_order_release);
     });
 
     animate_status(ui, percent, "Connecting", [&] {
-        return pending.load(std::memory_order_acquire) > 0;
+        return !done.load(std::memory_order_acquire);
     });
 
     patch_worker.join();
-    client_worker.join();
-    return patch_ok && client_ok;
+    return patch_ok;
 }
 
 static void launch_delay_with_animation(ogg::launcher::LauncherUi& ui) {
@@ -151,17 +156,16 @@ static void launch_delay_with_animation(ogg::launcher::LauncherUi& ui) {
     });
 }
 
-static bool launch_client(const fs::path& client_path, const std::string& client_url, ogg::launcher::LauncherUi& ui) {
-    if (client_url.empty()) {
-        status(ui, -1, "No client URL.");
+static bool launch_client(const fs::path& client_path, ogg::launcher::LauncherUi& ui) {
+    if (!fs::is_regular_file(client_path)) {
+        status(ui, -1, "Client executable not found.");
         return false;
     }
 
     hold_ui(ui);
     launch_delay_with_animation(ui);
 
-    const std::wstring url_wide = ogg::http_client::to_wide(client_url);
-    std::wstring command_line = L"\"" + client_path.wstring() + L"\" \"" + url_wide + L"\"";
+    std::wstring command_line = L"\"" + client_path.wstring() + L"\"";
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
@@ -185,7 +189,7 @@ struct HostEntry {
     std::uint16_t port;
 };
 
-static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& client_path, std::string& client_url) {
+static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& client_path) {
     const HostEntry hosts[] = {
         { L"127.0.0.1", 8123 },
         { L"localhost", 8123 },
@@ -206,7 +210,6 @@ static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& cl
     std::wstring active_host;
     std::uint16_t active_port = 8123;
     std::string last_error = "No patch server reachable.";
-    client_url.clear();
 
     const int host_count = static_cast<int>(sizeof(hosts) / sizeof(hosts[0]));
     for (int i = 0; i < host_count; ++i) {
@@ -215,10 +218,8 @@ static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& cl
 
         int patch_status = 0;
         std::vector<std::uint8_t> patch_body;
-        int client_status = 0;
-        std::vector<std::uint8_t> client_body;
         if (!probe_host_with_connecting_animation(
-                ui, try_progress, entry.host, entry.port, patch_status, patch_body, client_status, client_body)) {
+                ui, try_progress, entry.host, entry.port, patch_status, patch_body)) {
             last_error = "Connection failed.";
             status(ui, try_progress, last_error);
             continue;
@@ -236,29 +237,31 @@ static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& cl
             continue;
         }
 
-        if (client_status != 200) {
-            last_error = "Client page HTTP " + std::to_string(client_status);
-            status(ui, try_progress, last_error);
-            continue;
-        }
-
         active_host = entry.host;
         active_port = entry.port;
-        client_url = ogg::http_client::build_http_url(active_host, active_port, "/client");
         hold_ui(ui);
         status(ui, kProgressPatchReady, "Patch found.");
         hold_ui(ui);
         break;
     }
 
-    if (remote_name.empty() || client_url.empty()) {
+    if (remote_name.empty()) {
         status(ui, -1, last_error);
         return WorkflowResult::NetworkError;
     }
 
     const std::string remote_base = ogg::http_client::basename(remote_name);
-    client_path = find_local_client_match(client_dir, remote_base);
-    if (client_path.empty()) {
+    client_path = resolve_client_path(client_dir, remote_base);
+    const bool has_local = fs::is_regular_file(client_path);
+    const bool using_adjacent = has_local && fs::equivalent(client_path, get_exe_directory() / remote_base);
+
+    if (!has_local || using_adjacent) {
+        if (using_adjacent) {
+            status(ui, kProgressReadyToLaunch, "Using local client.");
+            hold_ui(ui);
+            return WorkflowResult::Ready;
+        }
+
         client_path = client_dir / remote_base;
         const std::wstring download_path = L"/" + ogg::http_client::to_wide(remote_base);
         status(ui, kProgressPatchReady, "Downloading client...");
@@ -303,12 +306,11 @@ static int launcher_main_gui(std::unique_ptr<ogg::launcher::LauncherUi>& ui) {
 
     while (true) {
         fs::path client_path;
-        std::string client_url;
         WorkflowResult workflow = WorkflowResult::NetworkError;
         std::atomic<bool> worker_done{false};
 
         std::thread worker([&] {
-            workflow = prepare_client(*ui, client_path, client_url);
+            workflow = prepare_client(*ui, client_path);
             worker_done.store(true, std::memory_order_release);
         });
 
@@ -318,7 +320,7 @@ static int launcher_main_gui(std::unique_ptr<ogg::launcher::LauncherUi>& ui) {
         worker.join();
 
         if (workflow == WorkflowResult::Ready) {
-            if (launch_client(client_path, client_url, *ui)) {
+            if (launch_client(client_path, *ui)) {
                 ui->pump();
                 return finish(ui, 0);
             }
@@ -353,11 +355,10 @@ static int launcher_main() {
 
         while (true) {
             fs::path client_path;
-            std::string client_url;
-            const WorkflowResult workflow = prepare_client(*ui, client_path, client_url);
+            const WorkflowResult workflow = prepare_client(*ui, client_path);
 
             if (workflow == WorkflowResult::Ready) {
-                if (launch_client(client_path, client_url, *ui)) {
+                if (launch_client(client_path, *ui)) {
                     ui->pump();
                     return finish(ui, 0);
                 }

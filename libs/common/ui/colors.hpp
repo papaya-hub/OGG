@@ -64,4 +64,23 @@ inline COLORREF background_colorref(ShellTheme theme = ShellTheme::Dark) {
     return theme == ShellTheme::Light ? RGB(255, 255, 255) : RGB(0, 0, 0);
 }
 
+// Client title-bar chrome uses fixed app colors (not DWM accent) for consistent branding.
+// Minimize hover optionally follows the system button-face color when available.
+inline COLORREF chrome_title_bar_colorref(ShellTheme theme = ShellTheme::Dark) {
+    return background_colorref(theme);
+}
+
+inline COLORREF chrome_close_hover_colorref() {
+    return RGB(209, 46, 46);
+}
+
+inline COLORREF chrome_minimize_hover_colorref(ShellTheme theme = ShellTheme::Dark) {
+    (void)theme;
+    return RGB(210, 210, 210);
+}
+
+inline COLORREF chrome_button_muted_colorref(ShellTheme theme = ShellTheme::Dark) {
+    return theme == ShellTheme::Light ? RGB(120, 120, 120) : RGB(180, 180, 180);
+}
+
 } // namespace ogg::ui

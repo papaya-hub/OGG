@@ -48,11 +48,12 @@ set(OGG_UI_SOURCES
     ${CMAKE_SOURCE_DIR}/libs/common/ui/render.cpp
     ${CMAKE_SOURCE_DIR}/libs/common/ui/widgets.cpp
     ${CMAKE_SOURCE_DIR}/libs/common/ui/shell_window.cpp
+    ${CMAKE_SOURCE_DIR}/libs/common/ui/client_shell.cpp
+    ${CMAKE_SOURCE_DIR}/libs/common/ui/xml_ui.cpp
 )
 
 set(OGG_CLIENT_UI_SOURCES
     ${OGG_UI_SOURCES}
-    ${CMAKE_SOURCE_DIR}/libs/common/ui/webview_host.cpp
     ${CMAKE_SOURCE_DIR}/libs/common/ui/hero_image.cpp
 )
 
@@ -62,7 +63,6 @@ if(OGG_PLATFORM_WINDOWS)
         src/OffGridGamer.OffGridGames.Client/client_ui_gui.cpp
         src/OffGridGamer.OffGridGames.Client/hero_art.rc
         libs/common/http_client.cpp
-        libs/win/webview2/webview_loader.rc
         ${OGG_CLIENT_UI_SOURCES}
     )
 else()
@@ -90,20 +90,17 @@ target_include_directories(ogg.client PRIVATE ${OGG_GENERATED_INCLUDE_DIR})
 if(OGG_PLATFORM_WINDOWS)
     target_include_directories(ogg.client PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
-        ${CMAKE_CURRENT_SOURCE_DIR}/libs/win/webview2/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client
     )
     target_compile_options(ogg.client PRIVATE -fms-extensions)
-    set_source_files_properties(libs/win/webview2/webview_loader.rc PROPERTIES
-        COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/libs/win/webview2")
     set_source_files_properties(src/OffGridGamer.OffGridGames.Client/hero_art.rc PROPERTIES
         COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client")
     target_link_libraries(ogg.client PRIVATE d2d1 dwrite dwmapi gdi32 gdiplus ole32 shlwapi uuid)
     add_custom_command(TARGET ogg.client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/libs/win/webview2/x64/WebView2Loader.dll
-                $<TARGET_FILE_DIR:ogg.client>/WebView2Loader.dll
-        COMMENT "Copying WebView2Loader.dll..."
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client/client_login.xml
+                $<TARGET_FILE_DIR:ogg.client>/client_login.xml
+        COMMENT "Copying client_login.xml..."
     )
 endif()
 target_include_directories(ogg.server PRIVATE
@@ -141,6 +138,9 @@ add_custom_command(TARGET ogg.server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
             $<TARGET_FILE_DIR:ogg.client>/${OGG_CLIENT_PATCH_NAME}
             $<TARGET_FILE_DIR:ogg.server>/public_html/${OGG_CLIENT_PATCH_NAME}
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client/client_login.xml
+            $<TARGET_FILE_DIR:ogg.server>/public_html/client_login.xml
     COMMENT "Copying client patch artifacts to server public_html..."
 )
 

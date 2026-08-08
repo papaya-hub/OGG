@@ -9,12 +9,10 @@
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (!argv || argc < 2 || argv[1][0] == L'\0') {
-        if (argv) LocalFree(argv);
-        return 1;
+    std::wstring url;
+    if (argv && argc >= 2 && argv[1][0] != L'\0') {
+        url = argv[1];
     }
-
-    const std::wstring url = argv[1];
-    LocalFree(argv);
+    if (argv) LocalFree(argv);
     return ogg::client::run_gui_with_url(url);
 }

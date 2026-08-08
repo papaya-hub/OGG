@@ -12,6 +12,8 @@
 #include "colors.hpp"
 #include "widgets.hpp"
 #include "window.hpp"
+#include "xml_ui.hpp"
+#include "client_shell.hpp"
 
 namespace ogg::ui {
 
@@ -67,6 +69,7 @@ public:
     const ShellView& view() const { return view_; }
 
     void set_action_buttons(const ShellButton* buttons, int count);
+    bool ensure_client_login_panel(const char* xml);
     void ensure_client_chrome_overlay();
     void layout_client_shell();
     void ensure_client_version_overlay(const std::wstring& version_text);
@@ -74,19 +77,17 @@ public:
     void set_status_font(const wchar_t* family, float size_pt);
 
 private:
-    static bool register_chrome_overlay_class();
     static bool register_hero_overlay_class();
     static bool register_version_overlay_class();
-    static LRESULT CALLBACK chrome_overlay_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
     static LRESULT CALLBACK hero_overlay_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
     static LRESULT CALLBACK version_overlay_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-    void layout_chrome_overlay();
+    static void client_chrome_close(void* user_data);
+    static void client_chrome_minimize(void* user_data);
     void layout_hero_overlay();
+    void layout_login_panel();
     void layout_version_overlay();
-    void paint_client_chrome(HDC hdc, const RECT& rc);
     void paint_hero_panel(HDC hdc, const RECT& rc);
     void paint_client_version(HDC hdc, const RECT& rc);
-    void update_chrome_hover(POINT pt);
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
     void invalidate();
     void on_paint();
@@ -100,13 +101,11 @@ private:
     ShellView view_{};
     ShellTheme theme_ = ShellTheme::Dark;
     bool defer_fade_ = false;
-    HWND chrome_overlay_ = nullptr;
     HWND hero_overlay_ = nullptr;
+    client_shell::ChromeOverlay client_chrome_{};
+    XmlUiHost login_ui_{};
     HWND version_overlay_ = nullptr;
     std::wstring version_overlay_text_;
-    bool hover_chrome_close_ = false;
-    bool hover_chrome_minimize_ = false;
-    bool chrome_mouse_tracking_ = false;
 };
 
 } // namespace ogg::ui

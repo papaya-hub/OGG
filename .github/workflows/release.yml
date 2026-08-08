@@ -38,8 +38,8 @@ jobs:
           VERSION=$(tr -d '\r\n' < src/version.txt)
           PKG="ogg-windows-${VERSION}"
           mkdir -p "dist/${PKG}"
-          cp build/ogg.launcher.exe build/ogg.server.exe build/WebView2Loader.dll "dist/${PKG}/"
-          cp build/ogg.client.*.exe build/ogg.client.*.patch "dist/${PKG}/"
+          cp build/ogg.launcher.exe build/ogg.server.exe "dist/${PKG}/"
+          cp build/ogg.client.*.exe build/ogg.client.*.patch build/client_login.xml "dist/${PKG}/"
           if [ -d build/public_html ]; then
             cp -r build/public_html "dist/${PKG}/public_html"
           else

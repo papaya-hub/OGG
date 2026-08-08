@@ -13,7 +13,6 @@
 #include "colors.hpp"
 #include "window.hpp"
 #include "http_client.hpp"
-#include "webview_host.hpp"
 #include "hero_image.hpp"
 
 namespace ogg::ui {
@@ -221,13 +220,8 @@ void ShellWindow::on_paint() {
 
 namespace {
 
-constexpr wchar_t kChromeOverlayClass[] = L"OGG.Client.ChromeOverlay";
 constexpr wchar_t kHeroOverlayClass[] = L"OGG.Client.HeroOverlay";
 constexpr wchar_t kVersionOverlayClass[] = L"OGG.Client.VersionOverlay";
-
-int client_chrome_height() {
-    return static_cast<int>(kClientChromeHeight);
-}
 
 } // namespace
 
@@ -259,23 +253,18 @@ bool ShellWindow::register_hero_overlay_class() {
     return RegisterClassExW(&wc) != 0;
 }
 
-bool ShellWindow::register_chrome_overlay_class() {
-    WNDCLASSEXW wc{};
-    if (GetClassInfoExW(GetModuleHandleW(nullptr), kChromeOverlayClass, &wc)) {
-        return true;
-    }
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = chrome_overlay_proc;
-    wc.hInstance = GetModuleHandleW(nullptr);
-    wc.lpszClassName = kChromeOverlayClass;
-    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = nullptr;
-    return RegisterClassExW(&wc) != 0;
+void ShellWindow::client_chrome_close(void* user_data) {
+    auto* self = static_cast<ShellWindow*>(user_data);
+    if (self && self->hwnd_) DestroyWindow(self->hwnd_);
+}
+
+void ShellWindow::client_chrome_minimize(void* user_data) {
+    auto* self = static_cast<ShellWindow*>(user_data);
+    if (self && self->hwnd_) ShowWindow(self->hwnd_, SW_MINIMIZE);
 }
 
 void ShellWindow::ensure_client_chrome_overlay() {
     if (!hwnd_ || !view_.minimal_chrome) return;
-    if (!register_chrome_overlay_class()) return;
     if (!register_hero_overlay_class()) return;
 
     if (!hero_overlay_) {
@@ -295,21 +284,10 @@ void ShellWindow::ensure_client_chrome_overlay() {
         );
     }
 
-    if (!chrome_overlay_) {
-        chrome_overlay_ = CreateWindowExW(
-            0,
-            kChromeOverlayClass,
-            nullptr,
-            WS_CHILD | WS_VISIBLE,
-            0,
-            0,
-            static_cast<int>(kTitleCloseBtnW * 2.f),
-            client_chrome_height(),
-            hwnd_,
-            nullptr,
-            GetModuleHandleW(nullptr),
-            this
-        );
+    client_chrome_.set_theme(theme_);
+    client_chrome_.set_repair_target(hero_overlay_);
+    if (!client_chrome_.hwnd()) {
+        client_chrome_.ensure(hwnd_, this, client_chrome_close, client_chrome_minimize);
     }
 
     layout_client_shell();
@@ -321,7 +299,7 @@ void ShellWindow::ensure_client_version_overlay(const std::wstring& version_text
 
     version_overlay_text_ = version_text;
     version_overlay_ = CreateWindowExW(
-        WS_EX_TRANSPARENT,
+        0,
         kVersionOverlayClass,
         nullptr,
         WS_CHILD | WS_VISIBLE,
@@ -341,26 +319,49 @@ void ShellWindow::bring_client_overlays_to_front() {
     if (hero_overlay_) {
         SetWindowPos(hero_overlay_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
+    if (login_ui_.hwnd()) {
+        SetWindowPos(login_ui_.hwnd(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
     if (version_overlay_) {
         SetWindowPos(version_overlay_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
-    if (chrome_overlay_) {
-        SetWindowPos(chrome_overlay_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    if (client_chrome_.hwnd()) {
+        SetWindowPos(client_chrome_.hwnd(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 }
 
 void ShellWindow::layout_client_shell() {
     if (!hwnd_ || !view_.minimal_chrome) return;
 
+    layout_login_panel();
     layout_hero_overlay();
-    layout_chrome_overlay();
-    layout_version_overlay();
-
     RECT rc{};
     GetClientRect(hwnd_, &rc);
-    const int login_w = static_cast<int>(kClientLoginPanelWidth);
-    if (login_w > 0 && rc.bottom > 0) {
-        set_embedded_webview_bounds(hwnd_, 0, 0, login_w, rc.bottom);
+    client_chrome_.layout(rc.right);
+    layout_version_overlay();
+
+    bring_client_overlays_to_front();
+    if (hero_overlay_) {
+        InvalidateRect(hero_overlay_, nullptr, FALSE);
+    }
+}
+
+bool ShellWindow::ensure_client_login_panel(const char* xml) {
+    if (!hwnd_ || !view_.minimal_chrome || !xml) return false;
+    if (!login_ui_.hwnd()) {
+        if (!login_ui_.create(hwnd_, xml)) return false;
+    }
+    layout_login_panel();
+    return true;
+}
+
+void ShellWindow::layout_login_panel() {
+    if (!hwnd_ || !login_ui_.hwnd()) return;
+    RECT rc{};
+    GetClientRect(hwnd_, &rc);
+    const auto panels = client_shell::measure_panels(rc.right, rc.bottom);
+    if (panels.login_w > 0 && panels.login_h > 0) {
+        login_ui_.layout(panels.login_x, panels.login_y, panels.login_w, panels.login_h);
     }
 }
 
@@ -368,32 +369,15 @@ void ShellWindow::layout_hero_overlay() {
     if (!hwnd_ || !hero_overlay_) return;
     RECT rc{};
     GetClientRect(hwnd_, &rc);
-    const int login_w = static_cast<int>(kClientLoginPanelWidth);
-    const int hero_w = rc.right - login_w;
-    if (hero_w <= 0) return;
+    const auto panels = client_shell::measure_panels(rc.right, rc.bottom);
+    if (panels.hero_w <= 0) return;
     SetWindowPos(
         hero_overlay_,
         HWND_TOP,
-        login_w,
-        0,
-        hero_w,
-        rc.bottom,
-        SWP_NOACTIVATE
-    );
-}
-
-void ShellWindow::layout_chrome_overlay() {
-    if (!hwnd_ || !chrome_overlay_) return;
-    RECT rc{};
-    GetClientRect(hwnd_, &rc);
-    const int overlay_w = static_cast<int>(kTitleCloseBtnW * 2.f);
-    SetWindowPos(
-        chrome_overlay_,
-        HWND_TOP,
-        rc.right - overlay_w,
-        0,
-        overlay_w,
-        client_chrome_height(),
+        panels.hero_x,
+        panels.hero_y,
+        panels.hero_w,
+        panels.hero_h,
         SWP_NOACTIVATE
     );
 }
@@ -484,87 +468,6 @@ void ShellWindow::paint_hero_panel(HDC hdc, const RECT& rc) {
     paint_embedded_hero_art(hdc, rc);
 }
 
-void ShellWindow::paint_client_chrome(HDC hdc, const RECT& rc) {
-    (void)rc;
-
-    const D2D1_RECT_F min_rect = client_chrome_minimize_rect();
-    const D2D1_RECT_F close_rect = client_chrome_close_rect();
-
-    static HFONT chrome_font = CreateFontW(
-        -28,
-        0,
-        0,
-        0,
-        FW_NORMAL,
-        FALSE,
-        FALSE,
-        FALSE,
-        DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,
-        L"Segoe UI"
-    );
-    HFONT old_font = reinterpret_cast<HFONT>(SelectObject(hdc, chrome_font));
-
-    RECT min_rc{
-        static_cast<LONG>(min_rect.left),
-        static_cast<LONG>(min_rect.top),
-        static_cast<LONG>(min_rect.right),
-        static_cast<LONG>(min_rect.bottom),
-    };
-    RECT close_rc{
-        static_cast<LONG>(close_rect.left),
-        static_cast<LONG>(close_rect.top),
-        static_cast<LONG>(close_rect.right),
-        static_cast<LONG>(close_rect.bottom),
-    };
-
-    const COLORREF danger = RGB(209, 46, 46);
-    const COLORREF grey_hover = RGB(210, 210, 210);
-    const COLORREF muted = RGB(210, 210, 210);
-    const COLORREF light = RGB(250, 250, 250);
-    const COLORREF on_grey = RGB(72, 72, 72);
-
-    SetBkMode(hdc, TRANSPARENT);
-
-    if (hover_chrome_minimize_) {
-        HBRUSH brush = CreateSolidBrush(grey_hover);
-        FillRect(hdc, &min_rc, brush);
-        DeleteObject(brush);
-        SetTextColor(hdc, on_grey);
-    } else {
-        SetTextColor(hdc, muted);
-    }
-    DrawTextW(hdc, L"\u2013", 1, &min_rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-    if (hover_chrome_close_) {
-        HBRUSH brush = CreateSolidBrush(danger);
-        FillRect(hdc, &close_rc, brush);
-        DeleteObject(brush);
-        SetTextColor(hdc, light);
-    } else {
-        SetTextColor(hdc, muted);
-    }
-    DrawTextW(hdc, L"\u00D7", 1, &close_rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, old_font);
-}
-
-void ShellWindow::update_chrome_hover(POINT pt) {
-    const D2D1_RECT_F min_rect = client_chrome_minimize_rect();
-    const D2D1_RECT_F close_rect = client_chrome_close_rect();
-
-    const bool hover_min = point_in_rect(pt, min_rect);
-    const bool hover_close = point_in_rect(pt, close_rect);
-
-    if (hover_min != hover_chrome_minimize_ || hover_close != hover_chrome_close_) {
-        hover_chrome_minimize_ = hover_min;
-        hover_chrome_close_ = hover_close;
-        if (chrome_overlay_) InvalidateRect(chrome_overlay_, nullptr, FALSE);
-    }
-}
-
 LRESULT CALLBACK ShellWindow::hero_overlay_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     ShellWindow* self = nullptr;
     if (msg == WM_CREATE) {
@@ -578,17 +481,20 @@ LRESULT CALLBACK ShellWindow::hero_overlay_proc(HWND hwnd, UINT msg, WPARAM wpar
 
     switch (msg) {
     case WM_NCHITTEST:
-        return HTCAPTION;
+        return HTTRANSPARENT;
 
     case WM_ERASEBKGND:
         return 1;
 
+    case WM_SIZE:
+        InvalidateRect(hwnd, nullptr, FALSE);
+        return 0;
+
     case WM_PAINT: {
         PAINTSTRUCT ps{};
         HDC hdc = BeginPaint(hwnd, &ps);
-        RECT client_rc{};
-        GetClientRect(hwnd, &client_rc);
-        self->paint_hero_panel(hdc, client_rc);
+        RECT paint_rc = ps.rcPaint;
+        self->paint_hero_panel(hdc, paint_rc);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -610,6 +516,9 @@ LRESULT CALLBACK ShellWindow::version_overlay_proc(HWND hwnd, UINT msg, WPARAM w
     if (!self) return DefWindowProcW(hwnd, msg, wparam, lparam);
 
     switch (msg) {
+    case WM_NCHITTEST:
+        return HTTRANSPARENT;
+
     case WM_ERASEBKGND:
         return 1;
 
@@ -618,81 +527,6 @@ LRESULT CALLBACK ShellWindow::version_overlay_proc(HWND hwnd, UINT msg, WPARAM w
         HDC hdc = BeginPaint(hwnd, &ps);
         self->paint_client_version(hdc, ps.rcPaint);
         EndPaint(hwnd, &ps);
-        return 0;
-    }
-
-    default:
-        return DefWindowProcW(hwnd, msg, wparam, lparam);
-    }
-}
-
-LRESULT CALLBACK ShellWindow::chrome_overlay_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    ShellWindow* self = nullptr;
-    if (msg == WM_CREATE) {
-        self = reinterpret_cast<ShellWindow*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
-    } else {
-        self = reinterpret_cast<ShellWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    }
-
-    if (!self) return DefWindowProcW(hwnd, msg, wparam, lparam);
-
-    switch (msg) {
-    case WM_NCHITTEST: {
-        POINT pt_screen{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
-        ScreenToClient(hwnd, &pt_screen);
-        const D2D1_RECT_F min_rect = client_chrome_minimize_rect();
-        const D2D1_RECT_F close_rect = client_chrome_close_rect();
-        if (point_in_rect(pt_screen, min_rect) || point_in_rect(pt_screen, close_rect)) {
-            return HTCLIENT;
-        }
-        return HTTRANSPARENT;
-    }
-
-    case WM_ERASEBKGND:
-        return 1;
-
-    case WM_PAINT: {
-        PAINTSTRUCT ps{};
-        HDC hdc = BeginPaint(hwnd, &ps);
-        self->paint_client_chrome(hdc, ps.rcPaint);
-        EndPaint(hwnd, &ps);
-        return 0;
-    }
-
-    case WM_MOUSEMOVE: {
-        POINT pt{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
-        self->update_chrome_hover(pt);
-        if (!self->chrome_mouse_tracking_) {
-            TRACKMOUSEEVENT tme{};
-            tme.cbSize = sizeof(tme);
-            tme.dwFlags = TME_LEAVE;
-            tme.hwndTrack = hwnd;
-            TrackMouseEvent(&tme);
-            self->chrome_mouse_tracking_ = true;
-        }
-        return 0;
-    }
-
-    case WM_MOUSELEAVE:
-        self->chrome_mouse_tracking_ = false;
-        self->hover_chrome_minimize_ = false;
-        self->hover_chrome_close_ = false;
-        InvalidateRect(hwnd, nullptr, FALSE);
-        return 0;
-
-    case WM_LBUTTONUP: {
-        POINT pt{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
-        const D2D1_RECT_F min_rect = client_chrome_minimize_rect();
-        const D2D1_RECT_F close_rect = client_chrome_close_rect();
-        if (point_in_rect(pt, close_rect)) {
-            if (self->hwnd_) DestroyWindow(self->hwnd_);
-            return 0;
-        }
-        if (point_in_rect(pt, min_rect)) {
-            if (self->hwnd_) ShowWindow(self->hwnd_, SW_MINIMIZE);
-            return 0;
-        }
         return 0;
     }
 
@@ -750,14 +584,7 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         const float width = static_cast<float>(rc.right - rc.left);
 
         if (self->view_.minimal_chrome) {
-            const int login_w = static_cast<int>(kClientLoginPanelWidth);
-            if (pt_screen.x >= login_w) {
-                const float chrome_top = kClientChromeHeight;
-                const float chrome_left = width - (kTitleCloseBtnW * 2.f);
-                if (static_cast<float>(pt_screen.y) < chrome_top &&
-                    static_cast<float>(pt_screen.x) >= chrome_left) {
-                    return HTCLIENT;
-                }
+            if (client_shell::allows_window_drag(pt_screen, width)) {
                 return HTCAPTION;
             }
             return HTCLIENT;
@@ -828,8 +655,6 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         self->render_.release_target();
         if (self->view_.minimal_chrome) {
             self->layout_client_shell();
-        } else {
-            layout_embedded_webview(hwnd);
         }
         self->invalidate();
         return 0;
@@ -843,7 +668,8 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     }
 
     case WM_DESTROY:
-        self->chrome_overlay_ = nullptr;
+        self->login_ui_.destroy();
+        self->client_chrome_.destroy();
         self->hero_overlay_ = nullptr;
         self->version_overlay_ = nullptr;
         self->hwnd_ = nullptr;
