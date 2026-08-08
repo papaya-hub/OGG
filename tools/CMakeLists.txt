@@ -21,6 +21,7 @@ if(OGG_PLATFORM_WINDOWS)
         ${OGG_LAUNCHER_DIR}/launcher_ui_cli.cpp
         ${OGG_LAUNCHER_DIR}/launcher_ui_gui.cpp
         ${CMAKE_SOURCE_DIR}/libs/common/http_client.cpp
+        ${CMAKE_SOURCE_DIR}/libs/common/ui/webview_layout_stub.cpp
         ${OGG_UI_SOURCES}
         ${OGG_LAUNCHER_DIR}/icon.rc
     )

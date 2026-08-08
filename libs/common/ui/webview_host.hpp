@@ -13,6 +13,7 @@
 namespace ogg::ui {
 
 bool embed_webview(HWND parent, const std::wstring& url, std::function<void()> on_loaded);
+void set_embedded_webview_bounds(HWND parent, int x, int y, int width, int height);
 void layout_embedded_webview(HWND parent);
 void destroy_embedded_webview();
 

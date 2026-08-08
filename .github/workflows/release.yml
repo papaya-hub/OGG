@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msys2: ucrt64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            make
+            zip
+
+      - name: Build (Release)
+        shell: msys2 {0}
+        run: |
+          export PATH="/ucrt64/bin:$PATH"
+          make build
+
+      - name: Package Windows release
+        shell: msys2 {0}
+        run: |
+          export PATH="/ucrt64/bin:$PATH"
+          VERSION=$(tr -d '\r\n' < src/version.txt)
+          PKG="ogg-windows-${VERSION}"
+          mkdir -p "dist/${PKG}"
+          cp build/ogg.launcher.exe build/ogg.server.exe build/WebView2Loader.dll "dist/${PKG}/"
+          cp build/ogg.client.*.exe build/ogg.client.*.patch "dist/${PKG}/"
+          if [ -d build/public_html ]; then
+            cp -r build/public_html "dist/${PKG}/public_html"
+          else
+            cp -r src/OffGridGamer.OffGridGames.Web/public_html "dist/${PKG}/public_html"
+          fi
+          cd dist && zip -r "${PKG}.zip" "${PKG}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y g++ cmake make zip
+
+      - name: Build (Release)
+        run: make build
+
+      - name: Package Linux release
+        run: |
+          VERSION=$(tr -d '\r\n' < src/version.txt)
+          PKG="ogg-linux-${VERSION}"
+          mkdir -p "dist/${PKG}"
+          cp build/ogg.server build/ogg.client.* "dist/${PKG}/"
+          if [ -d build/public_html ]; then
+            cp -r build/public_html "dist/${PKG}/public_html"
+          else
+            cp -r src/OffGridGamer.OffGridGames.Web/public_html "dist/${PKG}/public_html"
+          fi
+          cd dist && zip -r "${PKG}.zip" "${PKG}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.zip
+
+  publish-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: version
+        run: echo "tag=$(tr -d '\r\n' < src/version.txt)" >> $GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release files
+        run: |
+          mkdir -p release
+          find artifacts -name '*.zip' -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: OGG ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

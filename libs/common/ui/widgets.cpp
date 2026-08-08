@@ -28,6 +28,14 @@ D2D1_RECT_F chrome_overlay_close_rect() {
     );
 }
 
+D2D1_RECT_F client_chrome_minimize_rect() {
+    return D2D1::RectF(0.f, 0.f, kTitleCloseBtnW, kClientChromeHeight);
+}
+
+D2D1_RECT_F client_chrome_close_rect() {
+    return D2D1::RectF(kTitleCloseBtnW, 0.f, kTitleCloseBtnW * 2.f, kClientChromeHeight);
+}
+
 D2D1_RECT_F action_button_rect(float width, float height, int index, int button_count) {
     const float total_w = static_cast<float>(button_count) * kActionButtonW +
         static_cast<float>(button_count - 1) * kActionButtonGap;

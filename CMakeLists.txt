@@ -43,12 +43,14 @@ set(OGG_UI_SOURCES
 set(OGG_CLIENT_UI_SOURCES
     ${OGG_UI_SOURCES}
     ${CMAKE_SOURCE_DIR}/libs/common/ui/webview_host.cpp
+    ${CMAKE_SOURCE_DIR}/libs/common/ui/hero_image.cpp
 )
 
 if(OGG_PLATFORM_WINDOWS)
     add_executable(ogg.client WIN32
         src/OffGridGamer.OffGridGames.Client/main.cpp
         src/OffGridGamer.OffGridGames.Client/client_ui_gui.cpp
+        src/OffGridGamer.OffGridGames.Client/hero_art.rc
         libs/common/http_client.cpp
         libs/win/webview2/webview_loader.rc
         ${OGG_CLIENT_UI_SOURCES}
@@ -84,7 +86,9 @@ if(OGG_PLATFORM_WINDOWS)
     target_compile_options(ogg.client PRIVATE -fms-extensions)
     set_source_files_properties(libs/win/webview2/webview_loader.rc PROPERTIES
         COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/libs/win/webview2")
-    target_link_libraries(ogg.client PRIVATE d2d1 dwrite dwmapi gdi32 ole32 shlwapi uuid)
+    set_source_files_properties(src/OffGridGamer.OffGridGames.Client/hero_art.rc PROPERTIES
+        COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client")
+    target_link_libraries(ogg.client PRIVATE d2d1 dwrite dwmapi gdi32 gdiplus ole32 shlwapi uuid)
     add_custom_command(TARGET ogg.client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_SOURCE_DIR}/libs/win/webview2/x64/WebView2Loader.dll

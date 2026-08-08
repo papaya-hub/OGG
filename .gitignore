@@ -1,6 +1,7 @@
 build
 bin
 obj
+dist
 src/OffGridGamer.OffGridGames.Launcher/icon.ico
 
 # local test / agent output

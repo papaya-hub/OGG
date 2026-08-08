@@ -247,6 +247,27 @@ bool embed_webview(HWND parent, const std::wstring& url, LoadedHandler on_loaded
 
             if (FAILED(controller->get_CoreWebView2(&g_webview.webview)) || !g_webview.webview) return;
 
+            ICoreWebView2Settings* settings = nullptr;
+            if (SUCCEEDED(g_webview.webview->get_Settings(&settings)) && settings) {
+                settings->put_AreDefaultContextMenusEnabled(FALSE);
+                settings->put_IsStatusBarEnabled(FALSE);
+                settings->Release();
+            }
+
+            g_webview.webview->AddScriptToExecuteOnDocumentCreated(
+                LR"JS((function(){
+  var s=document.createElement('style');
+  s.textContent='*{user-select:none;-webkit-user-select:none;}input,textarea,[contenteditable=true]{user-select:text;-webkit-user-select:text;}';
+  document.documentElement.appendChild(s);
+  document.addEventListener('selectstart',function(e){
+    var t=e.target;
+    if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;
+    e.preventDefault();
+  },true);
+})();)JS",
+                nullptr
+            );
+
             RECT bounds{};
             layout_bounds(g_webview.parent, bounds);
             controller->put_Bounds(bounds);
@@ -273,6 +294,13 @@ bool embed_webview(HWND parent, const std::wstring& url, LoadedHandler on_loaded
     const HRESULT hr = create_env(nullptr, nullptr, nullptr, env_handler);
     env_handler->Release();
     return SUCCEEDED(hr);
+}
+
+void set_embedded_webview_bounds(HWND parent, int x, int y, int width, int height) {
+    if (!g_webview.controller || parent != g_webview.parent) return;
+    if (width <= 0 || height <= 0) return;
+    const RECT bounds{ x, y, x + width, y + height };
+    g_webview.controller->put_Bounds(bounds);
 }
 
 void layout_embedded_webview(HWND parent) {

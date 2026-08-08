@@ -9,6 +9,8 @@
 #include "ui/shell_window.hpp"
 #include "ui/webview_host.hpp"
 #include "ui/window.hpp"
+#include "version.hpp"
+#include "http_client.hpp"
 
 namespace ogg::client {
 
@@ -33,6 +35,8 @@ int run_gui_with_url(const std::wstring& url) {
 
     HWND hwnd = window->hwnd();
     if (!ogg::ui::embed_webview(hwnd, url, [&window]() {
+            window->layout_client_shell();
+            window->bring_client_overlays_to_front();
             window->fade_in_now();
         })) {
         MessageBoxW(
@@ -47,12 +51,13 @@ int run_gui_with_url(const std::wstring& url) {
         return 1;
     }
     window->ensure_client_chrome_overlay();
+    const std::wstring version_label =
+        L"v" + ogg::http_client::to_wide(std::string(ogg::VERSION));
+    window->ensure_client_version_overlay(version_label);
+    window->layout_client_shell();
 
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (msg.message == WM_SIZE && msg.hwnd == hwnd) {
-            ogg::ui::layout_embedded_webview(hwnd);
-        }
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
