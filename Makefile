@@ -1,7 +1,11 @@
 .PHONY: clean build server cmake launcher icon version stop_port tools client release
 
+ifeq ($(OS),Windows_NT)
 MINGW_CXX := /ucrt64/bin/g++.exe
 CMAKE_CONFIG := -DCMAKE_CXX_COMPILER=$(MINGW_CXX)
+else
+CMAKE_CONFIG :=
+endif
 CMAKE_BUILD := cmake -B build -S . $(CMAKE_CONFIG)
 CMAKE_ALL := cmake --build build
 
