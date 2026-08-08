@@ -63,12 +63,12 @@ jobs:
 
       - name: Build (Release)
         run: |
-          make cmake
-          cmake --build build -j 2>&1 | tee build.log
+          cmake -B build -S .
+          cmake --build build --target ogg.client ogg.server -j 2>&1 | tee build.log
           BUILD_STATUS=${PIPESTATUS[0]}
           if [ "$BUILD_STATUS" -ne 0 ]; then
             echo "=== build failed (tail) ==="
-            tail -n 60 build.log
+            tail -n 80 build.log
             exit "$BUILD_STATUS"
           fi
 
@@ -116,6 +116,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: OGG ${{ steps.version.outputs.tag }}
           generate_release_notes: true
+          overwrite_files: true
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
