@@ -1,11 +1,19 @@
 cmake_minimum_required(VERSION 3.15)
+
+set(_ogg_cxx_compiler "${CMAKE_CXX_COMPILER}")
+string(TOLOWER "${_ogg_cxx_compiler}" _ogg_cxx_compiler_lower)
+if(_ogg_cxx_compiler_lower MATCHES "ucrt64|mingw64|mingw32|w64-mingw32" OR WIN32)
+    set(CMAKE_CXX_STANDARD 23)
+else()
+    set(CMAKE_CXX_STANDARD 20)
+endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 project(OffGridGames LANGUAGES CXX)
 
 set(CMAKE_DEPENDS_USE_COMPILER FALSE CACHE BOOL "" FORCE)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Forced Release Mode" FORCE)
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_compile_options(-Os -ffunction-sections -fdata-sections -fno-rtti)
 
@@ -19,7 +27,6 @@ if(WIN32 OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR _ogg_cxx_compiler MATCHES "
 else()
     set(OGG_PLATFORM_WINDOWS FALSE)
     message(STATUS "Platform: POSIX (nix)")
-    set(CMAKE_CXX_STANDARD 20)
     add_link_options(-Wl,--gc-sections -s)
 endif()
 
