@@ -63,7 +63,12 @@ jobs:
 
       - name: Build (Release)
         run: |
-          cmake -B build -S .
+          cmake -B build -S . 2>&1 | tee configure.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "=== cmake configure failed ==="
+            cat configure.log
+            exit 1
+          fi
           cmake --build build --target ogg.client ogg.server -j 2>&1 | tee build.log
           BUILD_STATUS=${PIPESTATUS[0]}
           if [ "$BUILD_STATUS" -ne 0 ]; then
