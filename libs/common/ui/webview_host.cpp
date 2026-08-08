@@ -15,6 +15,7 @@
 #include <WebView2.h>
 
 #include <functional>
+#include <cstring>
 #include <string>
 
 #include "webview_host.hpp"
@@ -26,6 +27,9 @@
 namespace ogg::ui {
 
 namespace {
+
+constexpr int kWebViewLoaderResourceId = 101;
+constexpr wchar_t kWebViewLoaderDllName[] = L"WebView2Loader.dll";
 
 using LoadedHandler = std::function<void()>;
 
@@ -141,16 +145,62 @@ struct WebViewState {
 
 WebViewState g_webview{};
 
-HMODULE load_webview2_loader() {
-    wchar_t exe_path[MAX_PATH]{};
-    GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
-    PathRemoveFileSpecW(exe_path);
+bool extract_resource_to_file(int resource_id, const wchar_t* destination) {
+    const HRSRC resource = FindResourceW(nullptr, MAKEINTRESOURCEW(resource_id), RT_RCDATA);
+    if (!resource) return false;
 
+    const HGLOBAL loaded = LoadResource(nullptr, resource);
+    if (!loaded) return false;
+
+    const void* data = LockResource(loaded);
+    const DWORD size = SizeofResource(nullptr, resource);
+    if (!data || size == 0) return false;
+
+    HANDLE file = CreateFileW(
+        destination,
+        GENERIC_WRITE,
+        0,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+    if (file == INVALID_HANDLE_VALUE) return false;
+
+    DWORD written = 0;
+    const BOOL ok = WriteFile(file, data, size, &written, nullptr) && written == size;
+    CloseHandle(file);
+    return ok;
+}
+
+bool ensure_webview_loader_dll(wchar_t* loader_path, int loader_path_capacity) {
+    wchar_t exe_path[MAX_PATH]{};
+    if (!GetModuleFileNameW(nullptr, exe_path, MAX_PATH)) return false;
+
+    wchar_t exe_dir[MAX_PATH]{};
+    wcsncpy(exe_dir, exe_path, MAX_PATH - 1);
+    exe_dir[MAX_PATH - 1] = L'\0';
+    PathRemoveFileSpecW(exe_dir);
+
+    if (PathCombineW(loader_path, exe_dir, kWebViewLoaderDllName) == nullptr) return false;
+    if (static_cast<int>(wcslen(loader_path)) >= loader_path_capacity) return false;
+
+    if (GetFileAttributesW(loader_path) != INVALID_FILE_ATTRIBUTES) {
+        return true;
+    }
+
+    return extract_resource_to_file(kWebViewLoaderResourceId, loader_path);
+}
+
+HMODULE load_webview2_loader() {
     wchar_t loader_path[MAX_PATH]{};
-    PathCombineW(loader_path, exe_path, L"WebView2Loader.dll");
+    if (!ensure_webview_loader_dll(loader_path, MAX_PATH)) {
+        return LoadLibraryW(kWebViewLoaderDllName);
+    }
+
     HMODULE mod = LoadLibraryW(loader_path);
     if (mod) return mod;
-    return LoadLibraryW(L"WebView2Loader.dll");
+    return LoadLibraryW(kWebViewLoaderDllName);
 }
 
 void layout_bounds(HWND parent, RECT& bounds) {
@@ -168,10 +218,14 @@ bool embed_webview(HWND parent, const std::wstring& url, LoadedHandler on_loaded
     g_webview.url = url;
     g_webview.on_loaded = std::move(on_loaded);
 
-    if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED))) {
+    const HRESULT com_hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (com_hr == RPC_E_CHANGED_MODE) {
+        g_webview.com_initialized = false;
+    } else if (FAILED(com_hr)) {
         return false;
+    } else {
+        g_webview.com_initialized = true;
     }
-    g_webview.com_initialized = true;
 
     HMODULE loader = load_webview2_loader();
     if (!loader) return false;

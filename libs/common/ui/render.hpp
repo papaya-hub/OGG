@@ -29,6 +29,8 @@ struct RenderBrushes {
     ID2D1SolidColorBrush* button_on_primary_text = nullptr;
     ID2D1SolidColorBrush* button_on_secondary_text = nullptr;
     ID2D1SolidColorBrush* button_on_danger_text = nullptr;
+    ID2D1SolidColorBrush* chrome_muted = nullptr;
+    ID2D1SolidColorBrush* chrome_hover_grey = nullptr;
 };
 
 class RenderContext {
@@ -43,12 +45,17 @@ public:
 
     ID2D1HwndRenderTarget* target() const { return target_; }
     IDWriteTextFormat* text_format() const { return text_format_; }
+    IDWriteTextFormat* ellipsis_text_format() const { return ellipsis_text_format_; }
     IDWriteTextFormat* button_text_format() const { return button_text_format_; }
     IDWriteTextFormat* percent_text_format() const { return percent_text_format_; }
     IDWriteTextFormat* close_text_format() const { return close_text_format_; }
     ShellTheme theme() const { return theme_; }
 
     void set_theme(ShellTheme theme);
+
+    bool set_status_font(const wchar_t* family, float size_pt);
+
+    float measure_text_width(const wchar_t* text, UINT32 len, IDWriteTextFormat* format) const;
 
     ID2D1SolidColorBrush* brush_for_button_style(ButtonStyle style) const;
     ID2D1SolidColorBrush* brush_for_button_text(ButtonStyle style) const;
@@ -63,6 +70,7 @@ private:
     IDWriteFactory* write_factory_ = nullptr;
     ID2D1HwndRenderTarget* target_ = nullptr;
     IDWriteTextFormat* text_format_ = nullptr;
+    IDWriteTextFormat* ellipsis_text_format_ = nullptr;
     IDWriteTextFormat* button_text_format_ = nullptr;
     IDWriteTextFormat* percent_text_format_ = nullptr;
     IDWriteTextFormat* close_text_format_ = nullptr;

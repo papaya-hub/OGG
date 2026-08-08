@@ -15,11 +15,17 @@ class CliUi final : public LauncherUi {
 public:
     void log(const std::string& message) override {
         message_ = "[Launcher] " + message;
+        ellipsis_ = 0;
         render_status_line();
     }
 
     void set_progress(int percent) override {
         progress_ = percent;
+        render_status_line();
+    }
+
+    void set_ellipsis_dots(int count) override {
+        ellipsis_ = count < 0 ? 0 : (count > 3 ? 3 : count);
         render_status_line();
     }
 
@@ -42,11 +48,13 @@ public:
 
 private:
     void render_status_line() {
-        std::string line;
+        std::string line = message_;
+        if (ellipsis_ > 0) {
+            line += std::string(static_cast<std::size_t>(ellipsis_), '.');
+            line += std::string(static_cast<std::size_t>(3 - ellipsis_), ' ');
+        }
         if (progress_ >= 0) {
-            line = message_ + " (" + std::to_string(progress_) + "%)";
-        } else {
-            line = message_;
+            line += " (" + std::to_string(progress_) + "%)";
         }
 
         HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -63,6 +71,7 @@ private:
 
     std::string message_;
     int progress_ = -1;
+    int ellipsis_ = 0;
 };
 
 std::unique_ptr<LauncherUi> create_cli_ui() {

@@ -50,6 +50,7 @@ if(OGG_PLATFORM_WINDOWS)
         src/OffGridGamer.OffGridGames.Client/main.cpp
         src/OffGridGamer.OffGridGames.Client/client_ui_gui.cpp
         libs/common/http_client.cpp
+        libs/win/webview2/webview_loader.rc
         ${OGG_CLIENT_UI_SOURCES}
     )
 else()
@@ -60,7 +61,14 @@ set_target_properties(ogg.client PROPERTIES OUTPUT_NAME "${OGG_CLIENT_EXE_BASENA
 add_executable(ogg.server
     src/OffGridGamer.OffGridGames.Server/main.cpp
     src/OffGridGamer.OffGridGames.Server/controllers/controllers.cpp
+    libs/common/http_wire.cpp
 )
+
+if(OGG_PLATFORM_WINDOWS)
+    target_sources(ogg.server PRIVATE libs/win/http_server.cpp)
+else()
+    target_sources(ogg.server PRIVATE libs/nix/http_server.cpp)
+endif()
 
 add_executable(ogg.winsvc src/OffGridGamer.OffGridGames.WindowsService/main.cpp)
 
@@ -74,6 +82,8 @@ if(OGG_PLATFORM_WINDOWS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client
     )
     target_compile_options(ogg.client PRIVATE -fms-extensions)
+    set_source_files_properties(libs/win/webview2/webview_loader.rc PROPERTIES
+        COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/libs/win/webview2")
     target_link_libraries(ogg.client PRIVATE d2d1 dwrite dwmapi gdi32 ole32 shlwapi uuid)
     add_custom_command(TARGET ogg.client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy

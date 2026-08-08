@@ -3,6 +3,7 @@
 #endif
 #include <windows.h>
 #include <winhttp.h>
+#include <objbase.h>
 
 #include <array>
 #include <cstdio>
@@ -14,6 +15,7 @@
 #include "http_client.hpp"
 
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "ole32.lib")
 
 namespace fs = std::filesystem;
 
@@ -35,6 +37,17 @@ void apply_timeouts(HINTERNET session, DWORD send_timeout_ms, DWORD receive_time
         receive_timeout_ms
     );
 }
+
+struct ComApartment {
+    bool initialized = false;
+    ComApartment() {
+        const HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        initialized = hr == S_OK || hr == S_FALSE;
+    }
+    ~ComApartment() {
+        if (initialized) CoUninitialize();
+    }
+};
 
 } // namespace
 
@@ -100,14 +113,18 @@ bool http_get(
     body.clear();
     status_code = 0;
 
+    ComApartment com;
+
     HINTERNET session = WinHttpOpen(
         L"OGG.HttpClient/1.0",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_ACCESS_TYPE_NO_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
         0
     );
-    if (!session) return false;
+    if (!session) {
+        return false;
+    }
 
     apply_timeouts(session, kPatchSendTimeoutMs, kPatchReceiveTimeoutMs);
 
@@ -186,14 +203,18 @@ bool download_file(
     const fs::path& destination,
     const std::function<void(std::size_t received, std::size_t total)>& on_progress
 ) {
+    ComApartment com;
+
     HINTERNET session = WinHttpOpen(
         L"OGG.HttpClient/1.0",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_ACCESS_TYPE_NO_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
         0
     );
-    if (!session) return false;
+    if (!session) {
+        return false;
+    }
 
     apply_timeouts(session, kDownloadSendTimeoutMs, kDownloadReceiveTimeoutMs);
 

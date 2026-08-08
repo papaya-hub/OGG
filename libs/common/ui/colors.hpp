@@ -56,6 +56,10 @@ inline D2D1_COLOR_F chrome_muted_color() {
     return D2D1::ColorF(0.55f, 0.55f, 0.55f, 1.f);
 }
 
+inline D2D1_COLOR_F chrome_hover_grey_color() {
+    return D2D1::ColorF(0.82f, 0.82f, 0.82f, 1.f);
+}
+
 inline COLORREF background_colorref(ShellTheme theme = ShellTheme::Dark) {
     return theme == ShellTheme::Light ? RGB(255, 255, 255) : RGB(0, 0, 0);
 }

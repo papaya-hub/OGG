@@ -25,6 +25,7 @@ enum class ShellUserAction {
 constexpr UINT kMsgSetStatus = WM_APP + 10;
 constexpr UINT kMsgSetProgress = WM_APP + 11;
 constexpr UINT kMsgShowButtons = WM_APP + 12;
+constexpr UINT kMsgSetEllipsis = WM_APP + 13;
 
 class ShellWindow {
 public:
@@ -51,11 +52,13 @@ public:
     void set_status(const std::wstring& text);
     void set_status_utf8(const std::string& text);
     void set_progress(int percent);
+    void set_ellipsis_dots(int count);
     void set_show_buttons(bool show);
 
     void post_status(const std::wstring& text);
     void post_status_utf8(const std::string& text);
     void post_progress(int percent);
+    void post_ellipsis_dots(int count);
     void post_show_buttons(bool show);
 
     void close();
@@ -65,6 +68,7 @@ public:
 
     void set_action_buttons(const ShellButton* buttons, int count);
     void ensure_client_chrome_overlay();
+    void set_status_font(const wchar_t* family, float size_pt);
 
 private:
     static bool register_chrome_overlay_class();

@@ -111,6 +111,7 @@ void ShellWindow::invalidate() {
 
 void ShellWindow::set_status(const std::wstring& text) {
     view_.status_text = text;
+    view_.status_ellipsis = 0;
     invalidate();
 }
 
@@ -120,6 +121,11 @@ void ShellWindow::set_status_utf8(const std::string& text) {
 
 void ShellWindow::set_progress(int percent) {
     view_.progress = percent;
+    invalidate();
+}
+
+void ShellWindow::set_ellipsis_dots(int count) {
+    view_.status_ellipsis = count < 0 ? 0 : (count > 3 ? 3 : count);
     invalidate();
 }
 
@@ -144,6 +150,10 @@ void ShellWindow::post_progress(int percent) {
     if (hwnd_) PostMessageW(hwnd_, kMsgSetProgress, static_cast<WPARAM>(percent), 0);
 }
 
+void ShellWindow::post_ellipsis_dots(int count) {
+    if (hwnd_) PostMessageW(hwnd_, kMsgSetEllipsis, static_cast<WPARAM>(count), 0);
+}
+
 void ShellWindow::post_show_buttons(bool show) {
     if (hwnd_) PostMessageW(hwnd_, kMsgShowButtons, show ? 1 : 0, 0);
 }
@@ -152,6 +162,12 @@ void ShellWindow::set_action_buttons(const ShellButton* buttons, int count) {
     view_.button_count = count > 2 ? 2 : count;
     for (int i = 0; i < view_.button_count; ++i) {
         view_.buttons[i] = buttons[i];
+    }
+}
+
+void ShellWindow::set_status_font(const wchar_t* family, float size_pt) {
+    if (render_.set_status_font(family, size_pt)) {
+        invalidate();
     }
 }
 
@@ -259,16 +275,15 @@ void ShellWindow::layout_chrome_overlay() {
 }
 
 void ShellWindow::paint_client_chrome(HDC hdc, const RECT& rc) {
-    const float width = static_cast<float>(kTitleCloseBtnW * 2.f);
-    const D2D1_RECT_F min_rect = D2D1::RectF(0.f, 0.f, kTitleCloseBtnW, kTitleBarHeight);
-    const D2D1_RECT_F close_rect = D2D1::RectF(kTitleCloseBtnW, 0.f, width, kTitleBarHeight);
+    const D2D1_RECT_F min_rect = chrome_overlay_minimize_rect();
+    const D2D1_RECT_F close_rect = chrome_overlay_close_rect();
 
     static HFONT chrome_font = CreateFontW(
-        -34,
+        -28,
         0,
         0,
         0,
-        FW_SEMIBOLD,
+        FW_NORMAL,
         FALSE,
         FALSE,
         FALSE,
@@ -295,17 +310,19 @@ void ShellWindow::paint_client_chrome(HDC hdc, const RECT& rc) {
     };
 
     const COLORREF danger = RGB(209, 46, 46);
+    const COLORREF grey_hover = RGB(210, 210, 210);
     const COLORREF muted = RGB(140, 140, 140);
     const COLORREF light = RGB(250, 250, 250);
+    const COLORREF on_grey = RGB(72, 72, 72);
+
+    SetBkMode(hdc, TRANSPARENT);
 
     if (hover_chrome_minimize_) {
-        HBRUSH brush = CreateSolidBrush(danger);
+        HBRUSH brush = CreateSolidBrush(grey_hover);
         FillRect(hdc, &min_rc, brush);
         DeleteObject(brush);
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, light);
+        SetTextColor(hdc, on_grey);
     } else {
-        SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, muted);
     }
     DrawTextW(hdc, L"\u2013", 1, &min_rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -323,9 +340,8 @@ void ShellWindow::paint_client_chrome(HDC hdc, const RECT& rc) {
 }
 
 void ShellWindow::update_chrome_hover(POINT pt) {
-    const float width = static_cast<float>(kTitleCloseBtnW * 2.f);
-    const D2D1_RECT_F min_rect = D2D1::RectF(0.f, 0.f, kTitleCloseBtnW, kTitleBarHeight);
-    const D2D1_RECT_F close_rect = D2D1::RectF(kTitleCloseBtnW, 0.f, width, kTitleBarHeight);
+    const D2D1_RECT_F min_rect = chrome_overlay_minimize_rect();
+    const D2D1_RECT_F close_rect = chrome_overlay_close_rect();
 
     const bool hover_min = point_in_rect(pt, min_rect);
     const bool hover_close = point_in_rect(pt, close_rect);
@@ -379,9 +395,8 @@ LRESULT CALLBACK ShellWindow::chrome_overlay_proc(HWND hwnd, UINT msg, WPARAM wp
 
     case WM_LBUTTONUP: {
         POINT pt{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
-        const float width = static_cast<float>(kTitleCloseBtnW * 2.f);
-        const D2D1_RECT_F min_rect = D2D1::RectF(0.f, 0.f, kTitleCloseBtnW, kTitleBarHeight);
-        const D2D1_RECT_F close_rect = D2D1::RectF(kTitleCloseBtnW, 0.f, width, kTitleBarHeight);
+        const D2D1_RECT_F min_rect = chrome_overlay_minimize_rect();
+        const D2D1_RECT_F close_rect = chrome_overlay_close_rect();
         if (point_in_rect(pt, close_rect)) {
             if (self->hwnd_) DestroyWindow(self->hwnd_);
             return 0;
@@ -414,11 +429,19 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         auto* text = reinterpret_cast<std::wstring*>(lparam);
         if (text) {
             self->view_.status_text = *text;
+            self->view_.status_ellipsis = 0;
             delete text;
             self->invalidate();
         }
         return 0;
     }
+
+    case kMsgSetEllipsis:
+        self->view_.status_ellipsis = static_cast<int>(wparam);
+        if (self->view_.status_ellipsis < 0) self->view_.status_ellipsis = 0;
+        if (self->view_.status_ellipsis > 3) self->view_.status_ellipsis = 3;
+        self->invalidate();
+        return 0;
 
     case kMsgSetProgress:
         self->view_.progress = static_cast<int>(wparam);
@@ -431,9 +454,6 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         return 0;
 
     case WM_NCHITTEST: {
-        if (self->view_.minimal_chrome) {
-            return HTCLIENT;
-        }
         POINT pt_screen{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
         ScreenToClient(hwnd, &pt_screen);
 
@@ -441,13 +461,49 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         GetClientRect(hwnd, &rc);
         const float width = static_cast<float>(rc.right - rc.left);
 
-        if (static_cast<float>(pt_screen.y) < kTitleBarHeight) {
+        if (static_cast<float>(pt_screen.y) < kTitleBarHeight + kChromeBtnYOffset) {
+            if (self->view_.minimal_chrome) {
+                const float overlay_left = width - (kTitleCloseBtnW * 2.f);
+                if (static_cast<float>(pt_screen.x) < overlay_left) {
+                    return HTCAPTION;
+                }
+                return HTCLIENT;
+            }
+
             const D2D1_RECT_F close_rect = title_close_rect(width);
             if (!point_in_rect(pt_screen, close_rect)) {
                 return HTCAPTION;
             }
         }
         return HTCLIENT;
+    }
+
+    case WM_MOUSEMOVE: {
+        if (!self->view_.minimal_chrome) {
+            POINT pt{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
+            RECT rc{};
+            GetClientRect(hwnd, &rc);
+            const float width = static_cast<float>(rc.right - rc.left);
+            const bool hover_close = point_in_rect(pt, title_close_rect(width));
+            if (hover_close != self->view_.hover_title_close) {
+                self->view_.hover_title_close = hover_close;
+                self->invalidate();
+            }
+            TRACKMOUSEEVENT tme{};
+            tme.cbSize = sizeof(tme);
+            tme.dwFlags = TME_LEAVE;
+            tme.hwndTrack = hwnd;
+            TrackMouseEvent(&tme);
+        }
+        return 0;
+    }
+
+    case WM_MOUSELEAVE: {
+        if (!self->view_.minimal_chrome && self->view_.hover_title_close) {
+            self->view_.hover_title_close = false;
+            self->invalidate();
+        }
+        return 0;
     }
 
     case WM_LBUTTONUP: {

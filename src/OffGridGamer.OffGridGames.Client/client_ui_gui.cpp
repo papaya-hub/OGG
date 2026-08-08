@@ -35,7 +35,14 @@ int run_gui_with_url(const std::wstring& url) {
     if (!ogg::ui::embed_webview(hwnd, url, [&window]() {
             window->fade_in_now();
         })) {
-        MessageBoxW(nullptr, L"Failed to start WebView2.", L"OGG Client", MB_ICONERROR);
+        MessageBoxW(
+            nullptr,
+            L"Failed to start WebView2.\n\n"
+            L"Install the WebView2 Runtime (Evergreen) from:\n"
+            L"https://developer.microsoft.com/microsoft-edge/webview2/",
+            L"OGG Client",
+            MB_ICONERROR
+        );
         window->close();
         return 1;
     }

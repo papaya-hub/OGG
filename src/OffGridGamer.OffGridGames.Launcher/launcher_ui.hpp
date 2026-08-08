@@ -16,6 +16,7 @@ public:
     virtual ~LauncherUi() = default;
     virtual void log(const std::string& message) = 0;
     virtual void set_progress(int percent) = 0;
+    virtual void set_ellipsis_dots(int count) = 0;
     virtual void pump() = 0;
     virtual void close() = 0;
     virtual void run() = 0;

@@ -8,19 +8,24 @@ namespace ogg::ui {
 
 D2D1_RECT_F title_close_rect(float width) {
     return D2D1::RectF(
-        width - kTitleCloseMargin - kTitleCloseBtnW,
-        kTitleCloseMargin,
-        width - kTitleCloseMargin,
-        kTitleCloseMargin + kTitleCloseBtnH
+        width - kTitleCloseBtnW,
+        kChromeBtnYOffset,
+        width,
+        kTitleBarHeight + kChromeBtnYOffset
     );
 }
 
-D2D1_RECT_F client_title_close_rect(float width) {
-    return D2D1::RectF(width - kTitleCloseBtnW, 0.f, width, kTitleBarHeight);
+D2D1_RECT_F chrome_overlay_minimize_rect() {
+    return D2D1::RectF(0.f, kChromeBtnYOffset, kTitleCloseBtnW, kTitleBarHeight + kChromeBtnYOffset);
 }
 
-D2D1_RECT_F client_title_minimize_rect(float width) {
-    return D2D1::RectF(width - (kTitleCloseBtnW * 2.f), 0.f, width - kTitleCloseBtnW, kTitleBarHeight);
+D2D1_RECT_F chrome_overlay_close_rect() {
+    return D2D1::RectF(
+        kTitleCloseBtnW,
+        kChromeBtnYOffset,
+        kTitleCloseBtnW * 2.f,
+        kTitleBarHeight + kChromeBtnYOffset
+    );
 }
 
 D2D1_RECT_F action_button_rect(float width, float height, int index, int button_count) {
@@ -39,6 +44,12 @@ bool point_in_rect(const POINT& pt, const D2D1_RECT_F& rect) {
            static_cast<float>(pt.y) <= rect.bottom;
 }
 
+namespace {
+
+constexpr float kEllipsisLabelGap = 4.f;
+
+} // namespace
+
 void paint_shell(ID2D1HwndRenderTarget* target, const RenderContext& ctx, const ShellView& view, float width, float height) {
     const auto& brushes = ctx.brushes();
     const ShellTheme theme = ctx.theme();
@@ -54,14 +65,24 @@ void paint_shell(ID2D1HwndRenderTarget* target, const RenderContext& ctx, const 
 
     if (!view.minimal_chrome) {
         const D2D1_RECT_F close_rect = title_close_rect(width);
-        target->FillRectangle(close_rect, brushes.danger);
-        target->DrawText(
-            L"\u00D7",
-            1,
-            ctx.close_text_format(),
-            close_rect,
-            brushes.button_on_danger_text
-        );
+        if (view.hover_title_close) {
+            target->FillRectangle(close_rect, brushes.danger);
+            target->DrawText(
+                L"\u00D7",
+                1,
+                ctx.close_text_format(),
+                close_rect,
+                brushes.button_on_danger_text
+            );
+        } else {
+            target->DrawText(
+                L"\u00D7",
+                1,
+                ctx.close_text_format(),
+                close_rect,
+                brushes.chrome_muted
+            );
+        }
     }
 
     if (!view.minimal_chrome) {
@@ -72,13 +93,55 @@ void paint_shell(ID2D1HwndRenderTarget* target, const RenderContext& ctx, const 
             width - 24.f,
             text_bottom,
         };
-        target->DrawText(
-            view.status_text.c_str(),
-            static_cast<UINT32>(view.status_text.size()),
-            ctx.text_format(),
-            text_rect,
-            brushes.text
-        );
+
+        if (view.status_ellipsis > 0 && ctx.ellipsis_text_format()) {
+            const wchar_t dots_buf[] = L"...";
+            const UINT32 dots_len = static_cast<UINT32>(view.status_ellipsis);
+
+            const float main_w = ctx.measure_text_width(
+                view.status_text.c_str(),
+                static_cast<UINT32>(view.status_text.size()),
+                ctx.text_format());
+            const float slot_w = ctx.measure_text_width(dots_buf, 3, ctx.ellipsis_text_format());
+            const float total_w = main_w + kEllipsisLabelGap + slot_w;
+            const float start_x = (text_rect.left + text_rect.right - total_w) / 2.f;
+
+            const D2D1_RECT_F main_rect{
+                start_x,
+                text_rect.top,
+                start_x + main_w,
+                text_rect.bottom,
+            };
+            const D2D1_RECT_F dots_rect{
+                start_x + main_w + kEllipsisLabelGap,
+                text_rect.top,
+                start_x + main_w + kEllipsisLabelGap + slot_w,
+                text_rect.bottom,
+            };
+
+            target->DrawText(
+                view.status_text.c_str(),
+                static_cast<UINT32>(view.status_text.size()),
+                ctx.text_format(),
+                main_rect,
+                brushes.text
+            );
+            target->DrawText(
+                dots_buf,
+                dots_len,
+                ctx.ellipsis_text_format(),
+                dots_rect,
+                brushes.text
+            );
+        } else {
+            target->DrawText(
+                view.status_text.c_str(),
+                static_cast<UINT32>(view.status_text.size()),
+                ctx.text_format(),
+                text_rect,
+                brushes.text
+            );
+        }
 
         if (view.progress >= 0) {
             const float bar_bottom = view.show_buttons ? height - 52.f : height - 20.f;

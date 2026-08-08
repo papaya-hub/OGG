@@ -3,6 +3,7 @@
 #endif
 #include <windows.h>
 #include <atomic>
+#include <functional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -22,6 +23,8 @@ constexpr int kProgressDownloadSpan = 50;
 constexpr int kProgressReadyToLaunch = 75;
 constexpr int kProgressDone = 100;
 constexpr DWORD kLaunchDelayMs = 300;
+constexpr DWORD kStateTransitionDelayMs = 200;
+constexpr DWORD kDotIntervalMs = 500;
 
 } // namespace
 
@@ -37,9 +40,24 @@ static fs::path get_exe_directory() {
     return fs::path(path).parent_path();
 }
 
-static fs::path find_local_client_match(const fs::path& exe_dir, const std::string& remote_name) {
+static fs::path get_client_data_directory() {
+    wchar_t local_app_data[MAX_PATH] = {0};
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local_app_data, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) {
+        return get_exe_directory() / "OffGridGames";
+    }
+    return fs::path(local_app_data) / "OffGridGames";
+}
+
+static bool ensure_client_data_directory(const fs::path& client_dir) {
+    std::error_code ec;
+    fs::create_directories(client_dir, ec);
+    return !ec;
+}
+
+static fs::path find_local_client_match(const fs::path& client_dir, const std::string& remote_name) {
     const std::string remote_base = ogg::http_client::basename(remote_name);
-    for (const auto& entry : fs::directory_iterator(exe_dir)) {
+    for (const auto& entry : fs::directory_iterator(client_dir)) {
         if (!entry.is_regular_file()) continue;
         const std::string local_name = entry.path().filename().string();
         if (local_name.starts_with("ogg.client.") && local_name.ends_with(".exe")) {
@@ -52,19 +70,85 @@ static fs::path find_local_client_match(const fs::path& exe_dir, const std::stri
 }
 
 static void status(ogg::launcher::LauncherUi& ui, int percent, const std::string& message) {
+    ui.set_ellipsis_dots(0);
     ui.set_progress(percent);
     ui.log(message);
     ui.pump();
 }
 
-static void pump_for_ms(ogg::launcher::LauncherUi& ui, DWORD duration_ms) {
+static void hold_ui(ogg::launcher::LauncherUi& ui, DWORD duration_ms = kStateTransitionDelayMs) {
     const DWORD start = GetTickCount();
-    for (;;) {
+    while (GetTickCount() - start < duration_ms) {
         ui.pump();
-        const DWORD elapsed = GetTickCount() - start;
-        if (elapsed >= duration_ms) break;
         Sleep(16);
     }
+}
+
+static void animate_status(
+    ogg::launcher::LauncherUi& ui,
+    int percent,
+    const std::string& prefix,
+    const std::function<bool()>& continue_animating
+) {
+    int dot_count = 1;
+    ui.set_progress(percent);
+    ui.log(prefix);
+    ui.set_ellipsis_dots(dot_count);
+    DWORD last_tick = GetTickCount();
+
+    while (continue_animating()) {
+        ui.pump();
+        const DWORD now = GetTickCount();
+        if (now - last_tick >= kDotIntervalMs) {
+            last_tick = now;
+            dot_count = (dot_count % 3) + 1;
+            ui.set_progress(percent);
+            ui.set_ellipsis_dots(dot_count);
+        }
+        Sleep(16);
+    }
+
+    ui.set_ellipsis_dots(0);
+}
+
+static bool probe_host_with_connecting_animation(
+    ogg::launcher::LauncherUi& ui,
+    int percent,
+    const wchar_t* host,
+    std::uint16_t port,
+    int& patch_status,
+    std::vector<std::uint8_t>& patch_body,
+    int& client_status,
+    std::vector<std::uint8_t>& client_body
+) {
+    std::atomic<int> pending{2};
+    bool patch_ok = false;
+    bool client_ok = false;
+
+    std::thread patch_worker([&] {
+        patch_ok = ogg::http_client::http_get(host, port, L"/api/ogg/patch", patch_status, patch_body);
+        pending.fetch_sub(1, std::memory_order_release);
+    });
+
+    std::thread client_worker([&] {
+        client_ok = ogg::http_client::http_get(host, port, L"/client", client_status, client_body);
+        pending.fetch_sub(1, std::memory_order_release);
+    });
+
+    animate_status(ui, percent, "Connecting", [&] {
+        return pending.load(std::memory_order_acquire) > 0;
+    });
+
+    patch_worker.join();
+    client_worker.join();
+    return patch_ok && client_ok;
+}
+
+static void launch_delay_with_animation(ogg::launcher::LauncherUi& ui) {
+    const DWORD start = GetTickCount();
+    animate_status(ui, kProgressDone, "Launching", [&] {
+        return GetTickCount() - start < kLaunchDelayMs;
+    });
 }
 
 static bool launch_client(const fs::path& client_path, const std::string& client_url, ogg::launcher::LauncherUi& ui) {
@@ -73,8 +157,8 @@ static bool launch_client(const fs::path& client_path, const std::string& client
         return false;
     }
 
-    status(ui, kProgressDone, "Launching...");
-    pump_for_ms(ui, kLaunchDelayMs);
+    hold_ui(ui);
+    launch_delay_with_animation(ui);
 
     const std::wstring url_wide = ogg::http_client::to_wide(client_url);
     std::wstring command_line = L"\"" + client_path.wstring() + L"\" \"" + url_wide + L"\"";
@@ -103,12 +187,17 @@ struct HostEntry {
 
 static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& client_path, std::string& client_url) {
     const HostEntry hosts[] = {
+        { L"127.0.0.1", 8123 },
         { L"localhost", 8123 },
         { L"ogg.sendermesh.com", 8123 },
         { L"in.msheriff.com", 8123 },
     };
 
-    const fs::path exe_dir = get_exe_directory();
+    const fs::path client_dir = get_client_data_directory();
+    if (!ensure_client_data_directory(client_dir)) {
+        status(ui, -1, "Could not create client data directory.");
+        return WorkflowResult::NetworkError;
+    }
     ui.show_error_actions(false);
     ui.set_progress(0);
     ui.pump();
@@ -116,6 +205,7 @@ static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& cl
     std::string remote_name;
     std::wstring active_host;
     std::uint16_t active_port = 8123;
+    std::string last_error = "No patch server reachable.";
     client_url.clear();
 
     const int host_count = static_cast<int>(sizeof(hosts) / sizeof(hosts[0]));
@@ -123,50 +213,54 @@ static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& cl
         const auto& entry = hosts[i];
         const int try_progress = (i + 1) * kProgressPerServerTry;
 
-        status(ui, try_progress, "Connecting...");
-
-        int status_code = 0;
-        std::vector<std::uint8_t> body;
-        if (!ogg::http_client::http_get(entry.host, entry.port, L"/api/ogg/patch", status_code, body)) {
-            status(ui, try_progress, "Connection failed.");
-            continue;
-        }
-        if (status_code != 200) {
-            status(ui, try_progress, "HTTP " + std::to_string(status_code));
-            continue;
-        }
-
-        remote_name = ogg::http_client::trim(ogg::http_client::body_as_string(body));
-        if (remote_name.empty()) {
-            status(ui, try_progress, "Empty patch response.");
-            continue;
-        }
-
+        int patch_status = 0;
+        std::vector<std::uint8_t> patch_body;
         int client_status = 0;
         std::vector<std::uint8_t> client_body;
-        if (!ogg::http_client::http_get(entry.host, entry.port, L"/client", client_status, client_body) ||
-            client_status != 200) {
-            status(ui, try_progress, "Client page unavailable.");
+        if (!probe_host_with_connecting_animation(
+                ui, try_progress, entry.host, entry.port, patch_status, patch_body, client_status, client_body)) {
+            last_error = "Connection failed.";
+            status(ui, try_progress, last_error);
+            continue;
+        }
+        if (patch_status != 200) {
+            last_error = "HTTP " + std::to_string(patch_status);
+            status(ui, try_progress, last_error);
+            continue;
+        }
+
+        remote_name = ogg::http_client::trim(ogg::http_client::body_as_string(patch_body));
+        if (remote_name.empty()) {
+            last_error = "Empty patch response.";
+            status(ui, try_progress, last_error);
+            continue;
+        }
+
+        if (client_status != 200) {
+            last_error = "Client page HTTP " + std::to_string(client_status);
+            status(ui, try_progress, last_error);
             continue;
         }
 
         active_host = entry.host;
         active_port = entry.port;
         client_url = ogg::http_client::build_http_url(active_host, active_port, "/client");
+        hold_ui(ui);
         status(ui, kProgressPatchReady, "Patch found.");
+        hold_ui(ui);
         break;
     }
 
     if (remote_name.empty() || client_url.empty()) {
-        status(ui, -1, "No patch server reachable.");
+        status(ui, -1, last_error);
         return WorkflowResult::NetworkError;
     }
 
     const std::string remote_base = ogg::http_client::basename(remote_name);
-    client_path = find_local_client_match(exe_dir, remote_base);
+    client_path = find_local_client_match(client_dir, remote_base);
     if (client_path.empty()) {
-        client_path = exe_dir / remote_base;
-        const std::wstring download_path = L"/public_html/" + ogg::http_client::to_wide(remote_base);
+        client_path = client_dir / remote_base;
+        const std::wstring download_path = L"/" + ogg::http_client::to_wide(remote_base);
         status(ui, kProgressPatchReady, "Downloading client...");
 
         const bool downloaded = ogg::http_client::download_file(
@@ -190,8 +284,10 @@ static WorkflowResult prepare_client(ogg::launcher::LauncherUi& ui, fs::path& cl
         }
 
         status(ui, kProgressReadyToLaunch, "Download complete.");
+        hold_ui(ui);
     } else {
         status(ui, kProgressReadyToLaunch, "Client up to date.");
+        hold_ui(ui);
     }
 
     return WorkflowResult::Ready;

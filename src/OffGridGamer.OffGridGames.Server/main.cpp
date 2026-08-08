@@ -9,7 +9,7 @@
     #include "nix_net.hpp"
 #endif
 
-#include "http_server.cpp"
+#include "http_server.hpp"
 
 namespace controllers = ogg::controllers;
 
@@ -72,15 +72,25 @@ int main(int argc, char* argv[]) {
     // 4. Launch Service Threads
     // Run HTTP Listener on dedicated thread
     std::thread http_thread([http_fd]() {
-        run_http_server(http_fd);
+        ogg::net::run_http_server(
+            http_fd,
+            +[](const ogg::net::HttpRequest& req) {
+                return controllers::handle_http_request(req);
+            }
+        );
     });
+
+    std::thread tcp_thread([tcp_fd]() {
+        ogg::net::run_iocp_event_loop(tcp_fd);
+    });
+    tcp_thread.detach();
 
     std::thread udp_thread([udp_fd]() {
         ogg::net::run_udp_receiver(udp_fd, controllers::handle_udp_datagram);
     });
+    udp_thread.detach();
 
     http_thread.join();
-    udp_thread.join();
 
     return 0;
 }

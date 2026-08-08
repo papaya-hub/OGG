@@ -19,13 +19,16 @@ public:
     void log(const std::string& message) override {
         if (!window_) return;
         window_->post_status_utf8(message);
-        pump();
     }
 
     void set_progress(int percent) override {
         if (!window_) return;
         window_->post_progress(percent);
-        pump();
+    }
+
+    void set_ellipsis_dots(int count) override {
+        if (!window_) return;
+        window_->post_ellipsis_dots(count);
     }
 
     void pump() override {
@@ -41,7 +44,6 @@ public:
     void show_error_actions(bool visible) override {
         if (!window_) return;
         window_->post_show_buttons(visible);
-        pump();
     }
 
     GuiUserAction wait_for_user_action() override {
@@ -70,6 +72,8 @@ std::unique_ptr<LauncherUi> create_gui_ui() {
         MessageBoxW(nullptr, L"Failed to create launcher window.", L"OGG Launcher", MB_ICONERROR);
         return nullptr;
     }
+
+    window->set_status_font(L"Tahoma", 11.f);
 
     window->set_status(L"OGG Launcher");
     window->set_progress(0);

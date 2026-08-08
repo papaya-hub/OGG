@@ -1,0 +1,2 @@
+// Embedded bootstrap loader so the client works when launched from AppData (no sidecar DLL).
+101 RCDATA "x64/WebView2Loader.dll"

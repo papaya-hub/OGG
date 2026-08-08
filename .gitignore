@@ -2,3 +2,8 @@ build
 bin
 obj
 src/OffGridGamer.OffGridGames.Launcher/icon.ico
+
+# local test / agent output
+launcher-out.txt
+launcher-test-out.txt
+*-out.txt
