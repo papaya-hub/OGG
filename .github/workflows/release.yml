@@ -62,20 +62,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y g++ cmake make zip
 
       - name: Build (Release)
+        shell: bash
         run: |
-          cmake -B build -S . 2>&1 | tee configure.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== cmake configure failed ==="
-            cat configure.log
-            exit 1
-          fi
-          cmake --build build --target ogg.client ogg.server -j 2>&1 | tee build.log
-          BUILD_STATUS=${PIPESTATUS[0]}
-          if [ "$BUILD_STATUS" -ne 0 ]; then
-            echo "=== build failed (tail) ==="
-            tail -n 80 build.log
-            exit "$BUILD_STATUS"
-          fi
+          set -e
+          cmake -B build -S . > configure.log 2>&1 || (cat configure.log && exit 1)
+          cmake --build build --target ogg.client ogg.server -j > build.log 2>&1 || (tail -n 80 build.log && exit 1)
+          tail -n 20 build.log
 
       - name: Package Linux release
         run: |
