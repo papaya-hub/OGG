@@ -40,9 +40,9 @@ void load_web_assets() {
     if (file.is_open()) {
         g_index_html = std::string((std::istreambuf_iterator<char>(file)),
                                    std::istreambuf_iterator<char>());
-        std::printf("[HTTP] Loaded %ls into memory.\n", html_path.c_str());
+        std::printf("[HTTP] Loaded %s into memory.\n", html_path.string().c_str());
     } else {
-        std::printf("[HTTP] Could not find %ls, using fallback 'OGG.Server'\n", html_path.c_str());
+        std::printf("[HTTP] Could not find %s, using fallback 'OGG.Server'\n", html_path.string().c_str());
     }
 
     g_patch_filename = ogg::CLIENT_EXE_NAME;
