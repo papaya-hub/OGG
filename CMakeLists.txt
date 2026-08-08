@@ -107,6 +107,7 @@ if(OGG_PLATFORM_WINDOWS)
     target_link_libraries(ogg.server PRIVATE ws2_32)
 else()
     target_include_directories(ogg.server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/nix)
+    target_link_libraries(ogg.server PRIVATE pthread)
 endif()
 
 add_custom_command(TARGET ogg.client POST_BUILD
