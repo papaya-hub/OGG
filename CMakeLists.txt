@@ -9,7 +9,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 add_compile_options(-Os -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti)
-add_link_options(-static-libgcc -static-libstdc++ -Wl,--gc-sections -s)
+
+string(TOLOWER "${CMAKE_CXX_COMPILER}" _ogg_cxx_compiler)
+if(WIN32 OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR _ogg_cxx_compiler MATCHES "ucrt64|mingw64|mingw32|w64-mingw32")
+    set(OGG_PLATFORM_WINDOWS TRUE)
+    message(STATUS "Platform: Windows/MinGW (_WIN32)")
+    add_link_options(-static-libgcc -static-libstdc++ -Wl,--gc-sections -s)
+else()
+    set(OGG_PLATFORM_WINDOWS FALSE)
+    message(STATUS "Platform: POSIX (nix)")
+    add_link_options(-Wl,--gc-sections -s)
+endif()
 
 file(READ "${CMAKE_SOURCE_DIR}/src/version.txt" OGG_VERSION_RAW)
 string(STRIP "${OGG_VERSION_RAW}" OGG_VERSION)
@@ -23,15 +33,6 @@ configure_file(
     @ONLY
 )
 set(OGG_GENERATED_INCLUDE_DIR "${CMAKE_BINARY_DIR}/generated")
-
-string(TOLOWER "${CMAKE_CXX_COMPILER}" _ogg_cxx_compiler)
-if(WIN32 OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR _ogg_cxx_compiler MATCHES "ucrt64|mingw64|mingw32|w64-mingw32")
-    set(OGG_PLATFORM_WINDOWS TRUE)
-    message(STATUS "Platform: Windows/MinGW (_WIN32)")
-else()
-    set(OGG_PLATFORM_WINDOWS FALSE)
-    message(STATUS "Platform: POSIX (nix)")
-endif()
 
 set(OGG_UI_SOURCES
     ${CMAKE_SOURCE_DIR}/libs/common/ui/window.cpp
