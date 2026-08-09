@@ -86,6 +86,8 @@ constexpr float kBadgeGap = 8.f;
 
 constexpr float kBadgeDotTextGap = 5.f;
 
+constexpr int kBadgeStripPadLeft = 10;
+
 constexpr UINT kMsgServerMonitorChanged = WM_APP + 9;
 
 
@@ -100,7 +102,7 @@ int measure_badge_strip_width(const std::vector<std::wstring>& labels) {
 
     }
 
-    return width > 0 ? width : 120;
+    return width > 0 ? width + kBadgeStripPadLeft : 120 + kBadgeStripPadLeft;
 
 }
 
@@ -604,11 +606,13 @@ void AdminWindow::layout_chrome() {
 
     GetClientRect(hwnd_, &rc);
 
+    layout_server_badge_strip();
+
     chrome_.layout(rc.right);
 
     SetWindowPos(chrome_.hwnd(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
-    layout_server_badge_strip();
+    InvalidateRect(chrome_.hwnd(), nullptr, FALSE);
 
 }
 
@@ -1631,6 +1635,20 @@ void AdminWindow::refresh_server_badges() {
     layout_server_badge_strip();
 
     if (badge_strip_hwnd_) InvalidateRect(badge_strip_hwnd_, nullptr, FALSE);
+
+    if (chrome_.hwnd()) {
+
+        RECT rc{};
+
+        GetClientRect(hwnd_, &rc);
+
+        chrome_.layout(rc.right);
+
+        SetWindowPos(chrome_.hwnd(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+        InvalidateRect(chrome_.hwnd(), nullptr, FALSE);
+
+    }
 
 }
 

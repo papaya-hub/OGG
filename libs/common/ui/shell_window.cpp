@@ -369,7 +369,7 @@ void ShellWindow::ensure_client_version_overlay(const std::wstring& version_text
         GetModuleHandleW(nullptr),
         this
     );
-    layout_version_overlay();
+    layout_client_shell();
 }
 
 void ShellWindow::bring_client_overlays_to_front() {
@@ -384,6 +384,7 @@ void ShellWindow::bring_client_overlays_to_front() {
     }
     if (client_chrome_.hwnd()) {
         SetWindowPos(client_chrome_.hwnd(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        InvalidateRect(client_chrome_.hwnd(), nullptr, FALSE);
     }
 }
 
@@ -508,12 +509,15 @@ void ShellWindow::layout_version_overlay() {
 
     RECT rc{};
     GetClientRect(hwnd_, &rc);
+    const auto panels = client_shell::measure_panels(rc.right, rc.bottom);
     const int overlay_h = static_cast<int>(kVersionOverlayHeight);
+    const int x = panels.hero_x + static_cast<int>(kVersionOverlayMargin);
+    const int y = panels.hero_y + panels.hero_h - overlay_h - static_cast<int>(kVersionOverlayMargin);
     SetWindowPos(
         version_overlay_,
         HWND_TOP,
-        static_cast<int>(kVersionOverlayMargin),
-        rc.bottom - overlay_h - static_cast<int>(kVersionOverlayMargin),
+        x,
+        y,
         overlay_w,
         overlay_h,
         SWP_NOACTIVATE
@@ -541,7 +545,18 @@ void ShellWindow::paint_client_version(HDC hdc, const RECT& rc) {
     );
     HFONT old_font = reinterpret_cast<HFONT>(SelectObject(hdc, version_font));
     SetBkMode(hdc, TRANSPARENT);
-    const COLORREF muted = theme_ == ShellTheme::Light ? RGB(120, 120, 120) : RGB(160, 160, 160);
+    const COLORREF muted = theme_ == ShellTheme::Light ? RGB(235, 235, 235) : RGB(160, 160, 160);
+    const COLORREF shadow = theme_ == ShellTheme::Light ? RGB(24, 24, 24) : RGB(0, 0, 0);
+    RECT shadow_rc = rc;
+    OffsetRect(&shadow_rc, 1, 1);
+    SetTextColor(hdc, shadow);
+    DrawTextW(
+        hdc,
+        version_overlay_text_.c_str(),
+        static_cast<int>(version_overlay_text_.size()),
+        &shadow_rc,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX
+    );
     SetTextColor(hdc, muted);
     DrawTextW(
         hdc,

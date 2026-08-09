@@ -195,7 +195,7 @@ void ChromeOverlay::paint(HDC hdc, const RECT& rc) {
     COLORREF grey_hover = chrome_minimize_hover_colorref(theme_);
     const COLORREF sys_btnface = GetSysColor(COLOR_BTNFACE);
     if (sys_btnface != 0) grey_hover = sys_btnface;
-    const COLORREF glyph_idle = RGB(255, 255, 255);
+    const COLORREF glyph_idle = ogg::ui::chrome_button_muted_colorref(theme_);
     const COLORREF glyph_on_grey = RGB(72, 72, 72);
     const COLORREF light = RGB(250, 250, 250);
 
