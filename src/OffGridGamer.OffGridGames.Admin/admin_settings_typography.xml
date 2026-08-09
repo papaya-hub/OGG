@@ -1,0 +1,23 @@
+<Layout width="960">
+  <Class rule="page" padding="24,24" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="22" font_weight="600" margin="0,0,8,0" />
+  <Class rule="body" color="#4b5563" font_size="14" margin="0,0,12,0" />
+  <Class rule="field-label" color="#111827" font_size="12" font_weight="600" margin="0,0,0,0" />
+  <Class rule="input" height="32" border_color="#c8c8c8" bg_color="#ffffff" font_size="14" focus_border_color="#59bfff" radius="6" />
+  <Class rule="range" height="32" margin="0,0,8,0" border_color="#c8c8c8" bg_color="#ffffff" radius="6" />
+  <Class rule="select" height="32" margin="0,0,12,0" />
+  <Class rule="btn-primary" height="38" width="200" margin="8,0,0,0" bg_color="#59bfff" hover_bg_color="#4aaef0" color="#0d1117" hover_color="#0d1117" font_weight="600" radius="6" />
+  <Div class="page">
+    <Text class="title">Typography</Text>
+    <Text class="body">Font family and default sizes apply to all XML UI (labels, inputs, buttons). H1/H2/H3 scale from the label size.</Text>
+    <Label class="field-label">UI font family</Label>
+    <Select id="ui_font" class="select" options="fonts" />
+    <Label class="field-label">Label font size (px)</Label>
+    <Range id="label_font_size" class="range" min="8" max="72" value="12" />
+    <Label class="field-label">Input font size (px)</Label>
+    <Range id="input_font_size" class="range" min="8" max="72" value="14" />
+    <Label class="field-label">Button font size (px)</Label>
+    <Range id="button_font_size" class="range" min="8" max="72" value="13" />
+    <Button id="btn_save_typography" class="btn-primary">Save typography</Button>
+  </Div>
+</Layout>

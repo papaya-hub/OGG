@@ -1,0 +1,9 @@
+<Layout width="960">
+  <Class rule="tab-row" margin="0,0,16,0" />
+  <Class rule="tab" height="36" width="140" margin="0,0,8,0" bg_color="#e5e7eb" color="#374151" hover_bg_color="#dbeafe" hover_color="#1d4ed8" font_size="13" font_weight="600" radius="8" />
+  <Class rule="tab-active" height="36" width="140" margin="0,0,8,0" bg_color="#59bfff" color="#0d1117" hover_bg_color="#4aaef0" hover_color="#0d1117" font_size="13" font_weight="600" radius="8" />
+  <Div class="tab-row">
+    <Button id="tab_general" class="tab-active">General</Button>
+    <Button id="tab_login_images" class="tab">Login Images</Button>
+  </Div>
+</Layout>

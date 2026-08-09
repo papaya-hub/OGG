@@ -37,6 +37,15 @@ inline WindowSizePolicy launcher_window_policy() {
     return policy;
 }
 
+inline WindowSizePolicy admin_window_policy() {
+    WindowSizePolicy policy;
+    policy.width_ratio = 1.f;
+    policy.height_ratio = 1.f;
+    policy.margin_left_ratio = 0.f;
+    policy.margin_top_ratio = 0.f;
+    return policy;
+}
+
 struct WindowPlacement {
     int x = 0;
     int y = 0;
@@ -45,7 +54,9 @@ struct WindowPlacement {
 };
 
 RECT monitor_rect_at_cursor();
+RECT monitor_work_area_at_cursor();
 WindowPlacement placement_on_monitor(RECT monitor, const WindowSizePolicy& policy = client_window_policy());
+WindowPlacement placement_on_work_area(RECT work_area, const WindowSizePolicy& policy = client_window_policy());
 void fade_in(HWND hwnd, int duration_ms = kFadeInMs);
 void apply_rounded(HWND hwnd, int width, int height, float corner_radius = kCornerRadius);
 

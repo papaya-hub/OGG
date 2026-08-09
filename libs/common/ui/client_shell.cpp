@@ -9,6 +9,8 @@
 
 #include "client_shell.hpp"
 
+#include <cstring>
+#include <cstdint>
 #include <windowsx.h>
 
 namespace ogg::ui::client_shell {
@@ -22,7 +24,28 @@ ChromeOverlay* chrome_from_hwnd(HWND hwnd) {
 }
 
 int chrome_height_px() {
-    return static_cast<int>(LayoutSpec::kChromeHeight);
+    return static_cast<int>(LayoutSpec::kDragBandHeight);
+}
+
+void fix_bitmap_alpha(void* bits, int pixel_count) {
+    auto* px = reinterpret_cast<uint32_t*>(bits);
+    for (int i = 0; i < pixel_count; ++i) {
+        const uint32_t b = px[i] & 0xFF;
+        const uint32_t g = (px[i] >> 8) & 0xFF;
+        const uint32_t r = (px[i] >> 16) & 0xFF;
+        if (r > 8 || g > 8 || b > 8) {
+            px[i] |= 0xFF000000;
+        }
+    }
+}
+
+void draw_chrome_glyph(HDC hdc, const wchar_t* text, RECT* rc, COLORREF fg) {
+    SetTextColor(hdc, RGB(0, 0, 0));
+    RECT shadow = *rc;
+    OffsetRect(&shadow, 1, 1);
+    DrawTextW(hdc, text, 1, &shadow, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SetTextColor(hdc, fg);
+    DrawTextW(hdc, text, 1, rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 }
 
 } // namespace
@@ -49,11 +72,15 @@ PanelLayout measure_panels(int shell_width, int shell_height) {
     return layout;
 }
 
-bool allows_window_drag(POINT pt_client, float shell_width) {
+bool allows_window_drag(POINT pt_client, float shell_width, DragOptions options) {
     const float chrome_left = shell_width - (LayoutSpec::kChromeButtonWidth * 2.f);
     const float chrome_bottom = LayoutSpec::kChromeHeight + LayoutSpec::kChromeBtnYOffset;
     if (static_cast<float>(pt_client.y) < chrome_bottom &&
         static_cast<float>(pt_client.x) >= chrome_left) {
+        return false;
+    }
+    if (!options.full_window &&
+        static_cast<float>(pt_client.y) >= LayoutSpec::kDragBandHeight) {
         return false;
     }
     return true;
@@ -61,7 +88,7 @@ bool allows_window_drag(POINT pt_client, float shell_width) {
 
 bool ChromeOverlay::ensure(HWND parent, void* user_data, ActionHandler on_close, ActionHandler on_minimize) {
     if (!parent) return false;
-    destroy();
+    if (hwnd_) return true;
 
     parent_ = parent;
     user_data_ = user_data;
@@ -80,7 +107,7 @@ bool ChromeOverlay::ensure(HWND parent, void* user_data, ActionHandler on_close,
     }
 
     hwnd_ = CreateWindowExW(
-        0,
+        WS_EX_LAYERED,
         kChromeOverlayClass,
         nullptr,
         WS_CHILD | WS_VISIBLE,
@@ -93,6 +120,9 @@ bool ChromeOverlay::ensure(HWND parent, void* user_data, ActionHandler on_close,
         GetModuleHandleW(nullptr),
         this
     );
+    if (hwnd_) {
+        present_layered();
+    }
     return hwnd_ != nullptr;
 }
 
@@ -102,7 +132,6 @@ void ChromeOverlay::destroy() {
         hwnd_ = nullptr;
     }
     parent_ = nullptr;
-    repair_target_ = nullptr;
     user_data_ = nullptr;
     on_close_ = nullptr;
     on_minimize_ = nullptr;
@@ -123,20 +152,7 @@ void ChromeOverlay::layout(int shell_width) {
         panels.chrome_h,
         SWP_NOACTIVATE
     );
-}
-
-void ChromeOverlay::invalidate_repair_region() {
-    if (!repair_target_) return;
-    RECT hero_rc{};
-    GetClientRect(repair_target_, &hero_rc);
-    const int chrome_h = static_cast<int>(LayoutSpec::kChromeHeight + LayoutSpec::kChromeBtnYOffset);
-    RECT repair{
-        hero_rc.right - static_cast<LONG>(LayoutSpec::kChromeButtonWidth * 2.f),
-        0,
-        hero_rc.right,
-        chrome_h > 0 ? chrome_h : static_cast<LONG>(LayoutSpec::kChromeHeight),
-    };
-    InvalidateRect(repair_target_, &repair, FALSE);
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void ChromeOverlay::paint(HDC hdc, const RECT& rc) {
@@ -145,7 +161,7 @@ void ChromeOverlay::paint(HDC hdc, const RECT& rc) {
     const D2D1_RECT_F close_rect = client_chrome_close_rect(chrome_width);
 
     static HFONT chrome_font = CreateFontW(
-        -28,
+        -18,
         0,
         0,
         0,
@@ -156,7 +172,7 @@ void ChromeOverlay::paint(HDC hdc, const RECT& rc) {
         DEFAULT_CHARSET,
         OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
+        ANTIALIASED_QUALITY,
         DEFAULT_PITCH | FF_DONTCARE,
         L"Segoe UI"
     );
@@ -179,9 +195,9 @@ void ChromeOverlay::paint(HDC hdc, const RECT& rc) {
     COLORREF grey_hover = chrome_minimize_hover_colorref(theme_);
     const COLORREF sys_btnface = GetSysColor(COLOR_BTNFACE);
     if (sys_btnface != 0) grey_hover = sys_btnface;
-    const COLORREF muted = chrome_button_muted_colorref(theme_);
+    const COLORREF glyph_idle = RGB(255, 255, 255);
+    const COLORREF glyph_on_grey = RGB(72, 72, 72);
     const COLORREF light = RGB(250, 250, 250);
-    const COLORREF on_grey = RGB(72, 72, 72);
 
     SetBkMode(hdc, TRANSPARENT);
 
@@ -189,22 +205,77 @@ void ChromeOverlay::paint(HDC hdc, const RECT& rc) {
         HBRUSH brush = CreateSolidBrush(grey_hover);
         FillRect(hdc, &min_rc, brush);
         DeleteObject(brush);
-        SetTextColor(hdc, on_grey);
+        draw_chrome_glyph(hdc, L"\u2013", &min_rc, glyph_on_grey);
     } else {
-        SetTextColor(hdc, muted);
+        draw_chrome_glyph(hdc, L"\u2013", &min_rc, glyph_idle);
     }
-    DrawTextW(hdc, L"\u2013", 1, &min_rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     if (hover_close_) {
         HBRUSH brush = CreateSolidBrush(danger);
         FillRect(hdc, &close_rc, brush);
         DeleteObject(brush);
-        SetTextColor(hdc, light);
+        draw_chrome_glyph(hdc, L"\u00D7", &close_rc, light);
     } else {
-        SetTextColor(hdc, muted);
+        draw_chrome_glyph(hdc, L"\u00D7", &close_rc, glyph_idle);
     }
-    DrawTextW(hdc, L"\u00D7", 1, &close_rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old_font);
+}
+
+void ChromeOverlay::present_layered() {
+    if (!hwnd_) return;
+
+    RECT client_rc{};
+    GetClientRect(hwnd_, &client_rc);
+    const int w = client_rc.right - client_rc.left;
+    const int h = client_rc.bottom - client_rc.top;
+    if (w <= 0 || h <= 0) return;
+
+    HDC screen_dc = GetDC(nullptr);
+    if (!screen_dc) return;
+
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(screen_dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!dib || !bits) {
+        ReleaseDC(nullptr, screen_dc);
+        if (dib) DeleteObject(dib);
+        return;
+    }
+    std::memset(bits, 0, static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
+
+    HDC mem_dc = CreateCompatibleDC(screen_dc);
+    if (!mem_dc) {
+        DeleteObject(dib);
+        ReleaseDC(nullptr, screen_dc);
+        return;
+    }
+
+    HGDIOBJ old_bmp = SelectObject(mem_dc, dib);
+    paint(mem_dc, client_rc);
+    fix_bitmap_alpha(bits, w * h);
+
+    RECT wr{};
+    GetWindowRect(hwnd_, &wr);
+    POINT pt_dst{ wr.left, wr.top };
+    SIZE size{ w, h };
+    POINT pt_src{ 0, 0 };
+    BLENDFUNCTION blend{};
+    blend.BlendOp = AC_SRC_OVER;
+    blend.SourceConstantAlpha = 255;
+    blend.AlphaFormat = AC_SRC_ALPHA;
+
+    UpdateLayeredWindow(hwnd_, screen_dc, &pt_dst, &size, mem_dc, &pt_src, 0, &blend, ULW_ALPHA);
+
+    SelectObject(mem_dc, old_bmp);
+    DeleteDC(mem_dc);
+    DeleteObject(dib);
+    ReleaseDC(nullptr, screen_dc);
 }
 
 void ChromeOverlay::update_hover(POINT pt) {
@@ -222,7 +293,6 @@ void ChromeOverlay::update_hover(POINT pt) {
         hover_minimize_ = hover_min;
         hover_close_ = hover_close;
         InvalidateRect(hwnd_, nullptr, FALSE);
-        invalidate_repair_region();
     }
 }
 
@@ -254,10 +324,8 @@ LRESULT CALLBACK ChromeOverlay::window_proc(HWND hwnd, UINT msg, WPARAM wparam, 
 
     case WM_PAINT: {
         PAINTSTRUCT ps{};
-        HDC hdc = BeginPaint(hwnd, &ps);
-        RECT client_rc{};
-        GetClientRect(hwnd, &client_rc);
-        chrome->paint(hdc, client_rc);
+        BeginPaint(hwnd, &ps);
+        chrome->present_layered();
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -281,7 +349,6 @@ LRESULT CALLBACK ChromeOverlay::window_proc(HWND hwnd, UINT msg, WPARAM wparam, 
         chrome->hover_minimize_ = false;
         chrome->hover_close_ = false;
         InvalidateRect(hwnd, nullptr, FALSE);
-        chrome->invalidate_repair_region();
         return 0;
 
     case WM_LBUTTONUP: {

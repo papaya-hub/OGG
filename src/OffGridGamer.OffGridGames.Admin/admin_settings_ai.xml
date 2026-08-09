@@ -1,0 +1,72 @@
+<Layout width="960">
+  <Class rule="page" padding="24,24" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="22" font_weight="600" margin="0,0,8,0" />
+  <Class rule="body" color="#4b5563" font_size="14" margin="0,0,12,0" />
+  <Class rule="field-label" color="#111827" font_size="12" font_weight="600" margin="0,0,0,0" />
+  <Class rule="field-row" margin="0,0,12,0" />
+  <Class rule="key-row" margin="0,0,0,0" />
+  <Class rule="input" height="32" border_color="#c8c8c8" bg_color="#ffffff" font_size="14" focus_border_color="#59bfff" radius="6" />
+  <Class rule="textarea" border_color="#c8c8c8" bg_color="#ffffff" font_size="14" focus_border_color="#59bfff" radius="6" />
+  <Class rule="select" height="32" margin="0,0,12,0" />
+  <Class rule="radio-group" margin="0,0,12,0" />
+  <Class rule="radio" color="#111827" font_size="14" />
+  <Class rule="btn-primary" height="38" margin="8,0,0,0" bg_color="#59bfff" hover_bg_color="#4aaef0" color="#0d1117" hover_color="#0d1117" font_weight="600" radius="6" />
+  <Class rule="btn-secondary" height="38" margin="0,0,12,0" bg_color="#ffffff" hover_bg_color="#e5e7eb" color="#374151" hover_color="#111827" font_weight="600" radius="6" border_color="#c8c8c8" />
+  <Class rule="key-status" color="#047857" font_size="12" font_weight="600" margin="0,0,8,0" />
+  <Div class="page">
+    <Text class="title">AI settings</Text>
+    <Text class="body">Canonical settings file: %LOCALAPPDATA%\OffGridGames\appsettings.json. Saving any settings tab writes there; make client / make build run sync-settings to refresh build/generated for compiled targets.</Text>
+    <Text id="api_call_stats" class="body" />
+    <Text class="body">To generate or choose login hero images, open Assets → Login Images. General AI images and videos are under Assets → Images / Videos.</Text>
+    <Text id="selected_login_image" class="body" />
+    <Button id="btn_go_login_images" class="btn-secondary">Go there</Button>
+    <Label class="field-label">Image provider</Label>
+    <RadioGroup id="ai_provider" class="radio-group" value="openai">
+      <Radio class="radio" value="openai">OpenAI</Radio>
+      <Radio class="radio" value="gemini">Gemini</Radio>
+    </RadioGroup>
+    <Label class="field-label">OpenAI API key</Label>
+    <Row class="key-row">
+      <Input id="openai_api_key" class="input" type="password" placeholder="Paste key to set or replace..." />
+      <Button id="btn_test_openai" class="btn-secondary">Validate OpenAI</Button>
+    </Row>
+    <Text id="openai_key_status" class="key-status" />
+    <Label class="field-label">Gemini API key</Label>
+    <Row class="key-row">
+      <Input id="gemini_api_key" class="input" type="password" placeholder="Paste key to set or replace..." />
+      <Button id="btn_test_gemini" class="btn-secondary">Validate Gemini</Button>
+    </Row>
+    <Text id="gemini_key_status" class="key-status" />
+    <Label class="field-label">OpenAI image model</Label>
+    <Select id="openai_image_model" class="select" options="gpt-image-2,gpt-image-1.5,gpt-image-1,gpt-image-1-mini" />
+    <Label class="field-label">OpenAI quality</Label>
+    <Select id="openai_image_quality" class="select" options="low,medium,high,auto" />
+    <Label class="field-label">OpenAI image size</Label>
+    <Select id="openai_image_size" class="select" options="1536x1024,1024x1024,1024x1536,auto" />
+    <Label class="field-label">Gemini image model</Label>
+    <Row class="field-row">
+      <Select id="gemini_image_model" class="select" options="gemini-2.5-flash-image" />
+      <Button id="btn_refresh_gemini_models" class="btn-secondary">Refresh</Button>
+    </Row>
+    <Label class="field-label">OpenAI video model</Label>
+    <Row class="field-row">
+      <Select id="openai_video_model" class="select" options="sora-2,sora-2-pro" />
+      <Button id="btn_refresh_openai_video_models" class="btn-secondary">Refresh</Button>
+    </Row>
+    <Label class="field-label">OpenAI video size</Label>
+    <Select id="openai_video_size" class="select" options="1280x720,1920x1080,1080x1920" />
+    <Label class="field-label">OpenAI video duration (seconds)</Label>
+    <Select id="openai_video_seconds" class="select" options="4,8,12,16,20" />
+    <Label class="field-label">Gemini video model</Label>
+    <Row class="field-row">
+      <Select id="gemini_video_model" class="select" options="veo-3.1-fast-generate-preview" />
+      <Button id="btn_refresh_gemini_video_models" class="btn-secondary">Refresh</Button>
+    </Row>
+    <Label class="field-label">System prompt (prepended to every image and video request)</Label>
+    <TextArea id="ai_system_prompt" class="textarea" rows="4" placeholder="Abstract cinematic landscape..." />
+    <Row class="field-row">
+      <Button id="btn_save_ai" class="btn-primary">Save AI settings</Button>
+      <Text id="ai_save_status" class="body" />
+    </Row>
+  </Div>
+</Layout>

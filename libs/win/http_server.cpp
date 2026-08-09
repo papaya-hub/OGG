@@ -21,6 +21,7 @@
 
 #include "http_server.hpp"
 #include "http_wire.hpp"
+#include "http_websocket.hpp"
 #include "win_net.hpp"
 
 #pragma comment(lib, "ws2_32.lib")
@@ -221,6 +222,14 @@ void on_headers_complete(HttpConnection* conn) {
     set_client_socket_timeout(conn->socket);
 
     const std::string_view path = extract_request_path(conn->request);
+    if (is_websocket_upgrade(conn->request, path)) {
+        if (send_websocket_accept(conn->socket, conn->request)) {
+            run_websocket_session(conn->socket);
+        }
+        destroy_connection(conn);
+        return;
+    }
+
     const HttpRequest http_request{
         .method = "GET",
         .path = path,

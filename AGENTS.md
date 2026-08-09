@@ -131,11 +131,44 @@ Reusable borderless client window layout used by `ShellWindow` when `view().mini
 
 | Piece | Role |
 |---|---|
-| `LayoutSpec` | Constants: 320px login panel, chrome height, −4px button Y offset, 32px button width |
+| `LayoutSpec` | Constants: 320px login panel, 40px drag band, chrome height, −4px button Y offset, 32px button width |
 | `measure_panels(w, h)` | Returns `PanelLayout` rects for login, hero, and top-right chrome overlay |
-| `allows_window_drag(pt, width)` | Hit-test for borderless drag (whole window except minimize/close buttons) |
-| `ChromeOverlay` | Transparent HWND with minimize/close glyphs, hover fills, hero repair invalidation |
+| `allows_window_drag(pt, width, options)` | Hit-test for borderless drag; default 40px band, optional `full_window` |
+| `ChromeOverlay` | Layered HWND (`UpdateLayeredWindow`); glyphs always visible; hover fills only while hovered |
+
+**Transparent backgrounds:** XML UI `Button` and `ChromeOverlay` skip background fill when no `bg_color` is set (or `bg_color="transparent"`). Hover background is drawn only when `hover_bg_color` is set (not `transparent`). Omitting `bg_color` is not a default color — it means no fill.
 
 **Reuse pattern:** call `measure_panels()` to position child HWNDs (XML login panel, hero bitmap, version label). Create one `ChromeOverlay` with `ensure(parent, user_data, on_close, on_minimize)` and `layout(shell_width)`. Wire close/minimize via plain function pointers — not `std::function`.
 
-`ShellWindow::ensure_client_chrome_overlay()` owns hero + chrome + login layout; new client screens should use the same `client_shell` helpers rather than duplicating chrome math in `shell_window.cpp`.
+`ShellWindow::ensure_client_chrome_overlay()` owns hero + chrome + login layout; new client screens should use the same `client_shell` helpers rather than duplicating chrome math in `shell_window.cpp`. Set `view().client_drag_full_window = true` to allow dragging from the entire window instead of the 40px title band.
+
+### App settings (`appsettings.json`)
+
+| Path | Role |
+|---|---|
+| `%LOCALAPPDATA%/OffGridGames/appsettings.json` | **Canonical** settings (AI keys, appearance, typography, `source_dev_dir`) |
+| `config/appsettings.example.json` | Committed template only — copy to AppData or let first `load()` seed from repo `config/appsettings.json` |
+| `build/generated/client_theme.hpp` (etc.) | Compile-time theme from AppData via `ogg.sync-settings` |
+
+**You do not need `config/primary_color.txt` or `config/secondary_color.txt`.** Admin Save writes AppData only; `export_for_build()` regenerates `build/generated/*`.
+
+| Make target | Settings sync |
+|---|---|
+| `make sync_settings` | Runs `ogg.sync-settings` (AppData → `build/generated/`) |
+| `make build` / `make client` / `make admin` / `make launcher` | All run sync before building UI targets |
+
+### Login hero images and Admin (`make admin`)
+
+| Path | Role |
+|---|---|
+| `%LOCALAPPDATA%/OffGridGames/login_images/` | Persistent gallery of generated `.jpg` hero images |
+| `%LOCALAPPDATA%/OffGridGames/selected_login_image.txt` | Filename chosen for the next client embed |
+| `src/OffGridGamer.OffGridGames.Client/hero_art.jpg` | Build-time copy target (`sync_hero`) embedded via `hero_art.rc` |
+
+| Make target | Effect |
+|---|---|
+| `make hero` | Download/crop a new image into AppData `login_images/`, select it, copy to `hero_art.jpg` |
+| `make client` | Runs `sync_hero` (AppData selection → `hero_art.jpg`) then builds client |
+| `make admin` | Builds and launches `ogg.admin` — pick login images from the AppData gallery |
+
+Admin UI lives in `src/OffGridGamer.OffGridGames.Admin/` and uses `XmlUiHost` plus `Gallery`/`Image` tags for the login image grid.

@@ -14,6 +14,7 @@
 #include "window.hpp"
 #include "http_client.hpp"
 #include "hero_image.hpp"
+#include "server_monitor.hpp"
 
 namespace ogg::ui {
 
@@ -99,11 +100,62 @@ void ShellWindow::show() {
 }
 
 void ShellWindow::close() {
+    stop_server_status_monitor();
     if (hwnd_) {
         DestroyWindow(hwnd_);
         hwnd_ = nullptr;
     }
     render_.release_target();
+}
+
+void ShellWindow::refresh_server_badges() {
+    if (!server_monitor_active_) return;
+    const auto badges = server_monitor_.snapshot();
+    view_.server_badge_labels.clear();
+    view_.server_badge_up.clear();
+    view_.server_badge_polling.clear();
+    view_.server_badge_checking.clear();
+    view_.server_badge_local.clear();
+    view_.server_badge_labels.reserve(badges.size());
+    view_.server_badge_up.reserve(badges.size());
+    view_.server_badge_polling.reserve(badges.size());
+    view_.server_badge_checking.reserve(badges.size());
+    view_.server_badge_local.reserve(badges.size());
+    for (const auto& badge : badges) {
+        view_.server_badge_labels.push_back(badge.label);
+        view_.server_badge_up.push_back(badge.up);
+        view_.server_badge_polling.push_back(badge.polling);
+        view_.server_badge_checking.push_back(badge.checking);
+        view_.server_badge_local.push_back(badge.local_probe);
+    }
+    invalidate();
+}
+
+void ShellWindow::on_server_monitor_changed(void* user_data) {
+    auto* self = static_cast<ShellWindow*>(user_data);
+    if (!self || !self->hwnd_) return;
+    PostMessageW(self->hwnd_, kMsgServerMonitorChanged, 0, 0);
+}
+
+void ShellWindow::start_server_status_monitor(const std::vector<ogg::server_monitor::Target>& targets) {
+    stop_server_status_monitor();
+    if (!hwnd_ || targets.empty()) return;
+    server_monitor_.set_change_handler(this, on_server_monitor_changed);
+    server_monitor_.start(targets);
+    server_monitor_active_ = true;
+    refresh_server_badges();
+    SetTimer(hwnd_, kBadgeTimerId, kBadgeTimerMs, nullptr);
+}
+
+void ShellWindow::stop_server_status_monitor() {
+    if (hwnd_) KillTimer(hwnd_, kBadgeTimerId);
+    server_monitor_.stop();
+    server_monitor_active_ = false;
+    view_.server_badge_labels.clear();
+    view_.server_badge_up.clear();
+    view_.server_badge_polling.clear();
+    view_.server_badge_checking.clear();
+    view_.server_badge_local.clear();
 }
 
 void ShellWindow::invalidate() {
@@ -260,7 +312,13 @@ void ShellWindow::client_chrome_close(void* user_data) {
 
 void ShellWindow::client_chrome_minimize(void* user_data) {
     auto* self = static_cast<ShellWindow*>(user_data);
-    if (self && self->hwnd_) ShowWindow(self->hwnd_, SW_MINIMIZE);
+    if (!self || !self->hwnd_) return;
+    HWND hwnd = self->hwnd_;
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    if ((style & WS_MINIMIZEBOX) == 0) {
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style | WS_MINIMIZEBOX);
+    }
+    ShowWindow(hwnd, SW_MINIMIZE);
 }
 
 void ShellWindow::ensure_client_chrome_overlay() {
@@ -285,7 +343,6 @@ void ShellWindow::ensure_client_chrome_overlay() {
     }
 
     client_chrome_.set_theme(theme_);
-    client_chrome_.set_repair_target(hero_overlay_);
     if (!client_chrome_.hwnd()) {
         client_chrome_.ensure(hwnd_, this, client_chrome_close, client_chrome_minimize);
     }
@@ -353,6 +410,38 @@ bool ShellWindow::ensure_client_login_panel(const char* xml) {
     }
     layout_login_panel();
     return true;
+}
+
+void ShellWindow::set_login_input_insets(InputInsets insets) {
+    login_ui_.set_input_insets(insets);
+    if (login_ui_.hwnd()) {
+        layout_login_panel();
+    }
+}
+
+void ShellWindow::set_login_typography(UiTypography typography) {
+    login_ui_.set_typography(typography);
+    if (login_ui_.hwnd()) {
+        layout_login_panel();
+    }
+}
+
+void ShellWindow::set_login_control_width(float width) {
+    login_ui_.set_control_width(width);
+    if (login_ui_.hwnd()) {
+        layout_login_panel();
+    }
+}
+
+void ShellWindow::set_login_label_control_gap(float gap) {
+    login_ui_.set_label_control_gap(gap);
+    if (login_ui_.hwnd()) {
+        layout_login_panel();
+    }
+}
+
+void ShellWindow::set_login_scroll_wheel_step(float step) {
+    login_ui_.set_scroll_wheel_step(step);
 }
 
 void ShellWindow::layout_login_panel() {
@@ -575,6 +664,10 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         self->invalidate();
         return 0;
 
+    case kMsgServerMonitorChanged:
+        self->refresh_server_badges();
+        return 0;
+
     case WM_NCHITTEST: {
         POINT pt_screen{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
         ScreenToClient(hwnd, &pt_screen);
@@ -584,7 +677,9 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         const float width = static_cast<float>(rc.right - rc.left);
 
         if (self->view_.minimal_chrome) {
-            if (client_shell::allows_window_drag(pt_screen, width)) {
+            client_shell::DragOptions drag{};
+            drag.full_window = self->view_.client_drag_full_window;
+            if (client_shell::allows_window_drag(pt_screen, width, drag)) {
                 return HTCAPTION;
             }
             return HTCLIENT;
@@ -593,6 +688,12 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         if (static_cast<float>(pt_screen.y) < kTitleBarHeight + kChromeBtnYOffset) {
             const D2D1_RECT_F close_rect = title_close_rect(width);
             if (!point_in_rect(pt_screen, close_rect)) {
+                const int badge_index = hit_server_badge_index(self->view_, width, pt_screen);
+                if (badge_index >= 0 &&
+                    badge_index < static_cast<int>(self->view_.server_badge_local.size()) &&
+                    !self->view_.server_badge_local[static_cast<size_t>(badge_index)]) {
+                    return HTCLIENT;
+                }
                 return HTCAPTION;
             }
         }
@@ -634,6 +735,14 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         const float width = static_cast<float>(rc.right - rc.left);
         const float height = static_cast<float>(rc.bottom - rc.top);
 
+        const int badge_index = hit_server_badge_index(self->view_, width, pt);
+        if (badge_index >= 0 &&
+            badge_index < static_cast<int>(self->view_.server_badge_local.size()) &&
+            !self->view_.server_badge_local[static_cast<size_t>(badge_index)]) {
+            self->server_monitor_.recheck(static_cast<std::size_t>(badge_index));
+            return 0;
+        }
+
         if (point_in_rect(pt, title_close_rect(width))) {
             self->user_action_ = ShellUserAction::Close;
             DestroyWindow(hwnd);
@@ -659,6 +768,14 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         self->invalidate();
         return 0;
 
+    case WM_TIMER:
+        if (wparam == kBadgeTimerId) {
+            self->view_.server_badge_blink_bright = !self->view_.server_badge_blink_bright;
+            self->invalidate();
+            return 0;
+        }
+        return 0;
+
     case WM_PAINT: {
         PAINTSTRUCT ps{};
         BeginPaint(hwnd, &ps);
@@ -668,6 +785,7 @@ LRESULT CALLBACK ShellWindow::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     }
 
     case WM_DESTROY:
+        self->stop_server_status_monitor();
         self->login_ui_.destroy();
         self->client_chrome_.destroy();
         self->hero_overlay_ = nullptr;

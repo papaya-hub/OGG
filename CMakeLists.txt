@@ -52,6 +52,11 @@ set(OGG_UI_SOURCES
     ${CMAKE_SOURCE_DIR}/libs/common/ui/xml_ui.cpp
 )
 
+set(OGG_SHELL_MONITOR_SOURCES
+    ${CMAKE_SOURCE_DIR}/libs/common/http_websocket.cpp
+    ${CMAKE_SOURCE_DIR}/libs/common/server_monitor.cpp
+)
+
 set(OGG_CLIENT_UI_SOURCES
     ${OGG_UI_SOURCES}
     ${CMAKE_SOURCE_DIR}/libs/common/ui/hero_image.cpp
@@ -63,6 +68,7 @@ if(OGG_PLATFORM_WINDOWS)
         src/OffGridGamer.OffGridGames.Client/client_ui_gui.cpp
         src/OffGridGamer.OffGridGames.Client/hero_art.rc
         libs/common/http_client.cpp
+        ${OGG_SHELL_MONITOR_SOURCES}
         ${OGG_CLIENT_UI_SOURCES}
     )
 else()
@@ -70,10 +76,15 @@ else()
 endif()
 set_target_properties(ogg.client PROPERTIES OUTPUT_NAME "${OGG_CLIENT_EXE_BASENAME}")
 
+if(OGG_PLATFORM_WINDOWS)
+    set_target_properties(ogg.client PROPERTIES INTERPROCEDURAL_OPTIMIZATION FALSE)
+endif()
+
 add_executable(ogg.server
     src/OffGridGamer.OffGridGames.Server/main.cpp
     src/OffGridGamer.OffGridGames.Server/controllers/controllers.cpp
     libs/common/http_wire.cpp
+    libs/common/http_websocket.cpp
 )
 
 if(OGG_PLATFORM_WINDOWS)
@@ -86,6 +97,17 @@ add_executable(ogg.winsvc src/OffGridGamer.OffGridGames.WindowsService/main.cpp)
 
 add_subdirectory(tools)
 
+if(OGG_PLATFORM_WINDOWS)
+function(ogg_sync_settings_prebuild target)
+    add_dependencies(${target} ogg.sync-settings)
+    add_custom_command(TARGET ${target} PRE_BUILD
+        COMMAND $<TARGET_FILE:ogg.sync-settings>
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Syncing AppData settings into build/generated..."
+    )
+endfunction()
+endif()
+
 target_include_directories(ogg.client PRIVATE ${OGG_GENERATED_INCLUDE_DIR})
 if(OGG_PLATFORM_WINDOWS)
     target_include_directories(ogg.client PRIVATE
@@ -93,15 +115,68 @@ if(OGG_PLATFORM_WINDOWS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client
     )
     target_compile_options(ogg.client PRIVATE -fms-extensions)
+    set(OGG_HERO_ART_JPG ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client/hero_art.jpg)
     set_source_files_properties(src/OffGridGamer.OffGridGames.Client/hero_art.rc PROPERTIES
-        COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client")
-    target_link_libraries(ogg.client PRIVATE d2d1 dwrite dwmapi gdi32 gdiplus ole32 shlwapi uuid)
+        COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client"
+        OBJECT_DEPENDS "${OGG_HERO_ART_JPG}")
+    target_link_libraries(ogg.client PRIVATE d2d1 dwrite dwmapi gdi32 gdiplus ole32 shlwapi uuid comctl32 winhttp ws2_32)
     add_custom_command(TARGET ogg.client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client/client_login.xml
+                ${CMAKE_BINARY_DIR}/generated/client_login.xml
                 $<TARGET_FILE_DIR:ogg.client>/client_login.xml
-        COMMENT "Copying client_login.xml..."
+        COMMENT "Copying themed client_login.xml..."
     )
+
+    add_executable(ogg.admin WIN32
+        src/OffGridGamer.OffGridGames.Admin/main.cpp
+        src/OffGridGamer.OffGridGames.Admin/admin_ui_gui.cpp
+        src/OffGridGamer.OffGridGames.Admin/admin_window.cpp
+        libs/common/login_image_assets.cpp
+        libs/common/generated_media_assets.cpp
+        libs/common/app_settings.cpp
+        libs/common/ai_image.cpp
+        libs/common/ai_video.cpp
+        libs/common/http_client.cpp
+        ${OGG_SHELL_MONITOR_SOURCES}
+        libs/common/ui/hero_image.cpp
+        ${OGG_UI_SOURCES}
+    )
+    set_target_properties(ogg.admin PROPERTIES
+        OUTPUT_NAME "ogg.admin"
+        INTERPROCEDURAL_OPTIMIZATION FALSE
+    )
+    target_include_directories(ogg.admin PRIVATE
+        ${OGG_GENERATED_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin
+    )
+    target_link_libraries(ogg.admin PRIVATE d2d1 dwrite dwmapi gdi32 gdiplus ole32 winhttp comctl32 ws2_32)
+    add_custom_command(TARGET ogg.admin POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_dashboard.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_dashboard.xml
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_users.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_users.xml
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_assets_general.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_assets_general.xml
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_settings_ai.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_settings_ai.xml
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_settings_appearance.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_settings_appearance.xml
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_settings_typography.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_settings_typography.xml
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Admin/admin_settings_docs.xml
+                $<TARGET_FILE_DIR:ogg.admin>/admin_settings_docs.xml
+        COMMENT "Copying admin XML UI..."
+    )
+    ogg_sync_settings_prebuild(ogg.client)
+    ogg_sync_settings_prebuild(ogg.admin)
 endif()
 target_include_directories(ogg.server PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/libs/common
@@ -139,7 +214,7 @@ add_custom_command(TARGET ogg.server POST_BUILD
             $<TARGET_FILE_DIR:ogg.client>/${OGG_CLIENT_PATCH_NAME}
             $<TARGET_FILE_DIR:ogg.server>/public_html/${OGG_CLIENT_PATCH_NAME}
     COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_SOURCE_DIR}/src/OffGridGamer.OffGridGames.Client/client_login.xml
+            ${CMAKE_BINARY_DIR}/generated/client_login.xml
             $<TARGET_FILE_DIR:ogg.server>/public_html/client_login.xml
     COMMENT "Copying client patch artifacts to server public_html..."
 )

@@ -19,6 +19,18 @@
 
 namespace fs = std::filesystem;
 
+volatile long g_openai_api_calls = 0;
+volatile long g_gemini_api_calls = 0;
+
+void record_api_call(const wchar_t* host) {
+    if (!host) return;
+    if (_wcsicmp(host, L"api.openai.com") == 0) {
+        InterlockedIncrement(&g_openai_api_calls);
+    } else if (_wcsicmp(host, L"generativelanguage.googleapis.com") == 0) {
+        InterlockedIncrement(&g_gemini_api_calls);
+    }
+}
+
 namespace {
 
 constexpr DWORD kResolveTimeoutMs = 3000;
@@ -38,14 +50,36 @@ void apply_timeouts(HINTERNET session, DWORD send_timeout_ms, DWORD receive_time
     );
 }
 
+void apply_secure_protocols(HINTERNET session) {
+    DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
+#if defined(WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3)
+    protocols |= WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+#endif
+    WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+}
+
+HINTERNET open_session(DWORD send_timeout_ms, DWORD receive_timeout_ms) {
+    HINTERNET session = WinHttpOpen(
+        L"OGG.HttpClient/1.0",
+        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS,
+        0
+    );
+    if (!session) return nullptr;
+    apply_timeouts(session, send_timeout_ms, receive_timeout_ms);
+    apply_secure_protocols(session);
+    return session;
+}
+
 struct ComApartment {
-    bool initialized = false;
+    bool should_uninitialize = false;
     ComApartment() {
         const HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        initialized = hr == S_OK || hr == S_FALSE;
+        should_uninitialize = (hr == S_OK);
     }
     ~ComApartment() {
-        if (initialized) CoUninitialize();
+        if (should_uninitialize) CoUninitialize();
     }
 };
 
@@ -66,10 +100,10 @@ void attach_stdio_console() {
 
 std::wstring to_wide(const std::string& text) {
     if (text.empty()) return {};
-    const int size = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0);
+    if (size <= 0) return {};
     std::wstring wide(static_cast<std::size_t>(size), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, wide.data(), size);
-    if (!wide.empty() && wide.back() == L'\0') wide.pop_back();
+    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), wide.data(), size);
     return wide;
 }
 
@@ -115,18 +149,10 @@ bool http_get(
 
     ComApartment com;
 
-    HINTERNET session = WinHttpOpen(
-        L"OGG.HttpClient/1.0",
-        WINHTTP_ACCESS_TYPE_NO_PROXY,
-        WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS,
-        0
-    );
+    HINTERNET session = open_session(kPatchSendTimeoutMs, kPatchReceiveTimeoutMs);
     if (!session) {
         return false;
     }
-
-    apply_timeouts(session, kPatchSendTimeoutMs, kPatchReceiveTimeoutMs);
 
     HINTERNET connect = WinHttpConnect(session, host.c_str(), static_cast<INTERNET_PORT>(port), 0);
     if (!connect) {
@@ -205,18 +231,10 @@ bool download_file(
 ) {
     ComApartment com;
 
-    HINTERNET session = WinHttpOpen(
-        L"OGG.HttpClient/1.0",
-        WINHTTP_ACCESS_TYPE_NO_PROXY,
-        WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS,
-        0
-    );
+    HINTERNET session = open_session(kDownloadSendTimeoutMs, kDownloadReceiveTimeoutMs);
     if (!session) {
         return false;
     }
-
-    apply_timeouts(session, kDownloadSendTimeoutMs, kDownloadReceiveTimeoutMs);
 
     HINTERNET connect = WinHttpConnect(session, host.c_str(), static_cast<INTERNET_PORT>(port), 0);
     if (!connect) {
@@ -335,6 +353,109 @@ bool download_file(
     fs::remove(destination);
     fs::rename(temp_path, destination);
     return true;
+}
+
+bool https_request(
+    const wchar_t* host,
+    const wchar_t* path,
+    const wchar_t* method,
+    const std::string& extra_headers,
+    const std::vector<std::uint8_t>& request_body,
+    int& status_code,
+    std::vector<std::uint8_t>& response_body
+) {
+    response_body.clear();
+    status_code = 0;
+    if (!host || !path || !method) return false;
+
+    record_api_call(host);
+
+    ComApartment com;
+
+    HINTERNET session = open_session(kDownloadSendTimeoutMs, kDownloadReceiveTimeoutMs);
+    if (!session) return false;
+
+    HINTERNET connect = WinHttpConnect(session, host, INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!connect) {
+        WinHttpCloseHandle(session);
+        return false;
+    }
+
+    HINTERNET request = WinHttpOpenRequest(
+        connect,
+        method,
+        path,
+        nullptr,
+        WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        WINHTTP_FLAG_SECURE
+    );
+    if (!request) {
+        WinHttpCloseHandle(connect);
+        WinHttpCloseHandle(session);
+        return false;
+    }
+
+    std::wstring headers = L"Content-Type: application/json; charset=utf-8\r\nAccept: application/json\r\n";
+    if (!extra_headers.empty()) {
+        headers += to_wide(extra_headers);
+        if (!extra_headers.empty() && extra_headers.back() != '\n') headers += L"\r\n";
+    }
+
+    const bool sent = WinHttpSendRequest(
+        request,
+        headers.c_str(),
+        static_cast<DWORD>(-1),
+        request_body.empty() ? WINHTTP_NO_REQUEST_DATA : const_cast<BYTE*>(request_body.data()),
+        static_cast<DWORD>(request_body.size()),
+        static_cast<DWORD>(request_body.size()),
+        0
+    );
+    const bool received = sent && WinHttpReceiveResponse(request, nullptr);
+    if (!received) {
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connect);
+        WinHttpCloseHandle(session);
+        return false;
+    }
+
+    DWORD status = 0;
+    DWORD status_size = sizeof(status);
+    WinHttpQueryHeaders(
+        request,
+        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX,
+        &status,
+        &status_size,
+        WINHTTP_NO_HEADER_INDEX
+    );
+    status_code = static_cast<int>(status);
+
+    std::array<std::uint8_t, 8192> buffer{};
+    constexpr std::size_t kMaxResponseBytes = 64u * 1024u * 1024u;
+    for (;;) {
+        DWORD read = 0;
+        if (!WinHttpReadData(request, buffer.data(), static_cast<DWORD>(buffer.size()), &read)) break;
+        if (read == 0) break;
+        if (response_body.size() > kMaxResponseBytes || read > buffer.size()) break;
+        const std::size_t offset = response_body.size();
+        if (offset + static_cast<std::size_t>(read) > kMaxResponseBytes) break;
+        response_body.resize(offset + read);
+        std::memcpy(response_body.data() + offset, buffer.data(), read);
+    }
+
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    return true;
+}
+
+int api_openai_calls() {
+    return static_cast<int>(InterlockedCompareExchange(&g_openai_api_calls, 0, 0));
+}
+
+int api_gemini_calls() {
+    return static_cast<int>(InterlockedCompareExchange(&g_gemini_api_calls, 0, 0));
 }
 
 } // namespace ogg::http_client

@@ -2,6 +2,13 @@
 
 #include <d2d1.h>
 
+#if defined(__has_include)
+#if __has_include("client_theme.hpp")
+#include "client_theme.hpp"
+#define OGG_HAS_CLIENT_THEME 1
+#endif
+#endif
+
 namespace ogg::ui {
 
 enum class ShellTheme {
@@ -9,7 +16,11 @@ enum class ShellTheme {
     Light,
 };
 
-// Progress bar fill and primary buttons share the same blue.
+// Progress bar fill and primary buttons share theme primary (from appsettings via sync_settings).
+#if defined(OGG_HAS_CLIENT_THEME)
+inline D2D1_COLOR_F primary_color() { return theme::primary_color(); }
+inline D2D1_COLOR_F secondary_color() { return theme::secondary_color(); }
+#else
 inline D2D1_COLOR_F primary_color() {
     return D2D1::ColorF(0.35f, 0.75f, 1.f, 1.f);
 }
@@ -17,6 +28,7 @@ inline D2D1_COLOR_F primary_color() {
 inline D2D1_COLOR_F secondary_color() {
     return D2D1::ColorF(0.55f, 0.65f, 0.76f, 1.f);
 }
+#endif
 
 inline D2D1_COLOR_F danger_color() {
     return D2D1::ColorF(0.82f, 0.18f, 0.18f, 1.f);

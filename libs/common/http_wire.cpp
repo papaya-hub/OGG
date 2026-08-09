@@ -1,5 +1,7 @@
 #include "http_wire.hpp"
 
+#include "http_websocket.hpp"
+
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -158,6 +160,14 @@ void handle_http_connection(Socket client_fd, HttpHandler handler) {
     set_client_socket_timeout(client_fd);
 
     const std::string_view path = extract_request_path(request);
+    if (is_websocket_upgrade(request, path)) {
+        if (send_websocket_accept(client_fd, request)) {
+            run_websocket_session(client_fd);
+        }
+        close_socket(client_fd);
+        return;
+    }
+
     const HttpRequest http_request{
         .method = "GET",
         .path = path,

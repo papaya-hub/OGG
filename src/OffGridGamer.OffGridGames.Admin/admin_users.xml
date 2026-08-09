@@ -1,0 +1,14 @@
+<Layout width="960">
+  <Class rule="page" padding="32,28" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="28" font_weight="600" margin="0,0,8,0" />
+  <Class rule="subtitle" color="#4b5563" font_size="15" margin="0,0,24,0" />
+  <Class rule="card" padding="20,20" bg_color="#ffffff" radius="10" />
+  <Class rule="card-body" color="#4b5563" font_size="14" />
+  <Div class="page">
+    <Text class="title">Users</Text>
+    <Text class="subtitle">Account management will live here.</Text>
+    <Div class="card">
+      <Text class="card-body">No users configured in this local admin build yet.</Text>
+    </Div>
+  </Div>
+</Layout>

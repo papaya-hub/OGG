@@ -3,8 +3,10 @@
 #endif
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "launcher_ui.hpp"
+#include "server_monitor.hpp"
 #include "ui/shell_window.hpp"
 
 namespace ogg::launcher {
@@ -77,6 +79,11 @@ std::unique_ptr<LauncherUi> create_gui_ui() {
 
     window->set_status(L"OGG Launcher");
     window->set_progress(0);
+
+    const std::vector<ogg::server_monitor::Target> server_targets =
+        ogg::server_monitor::launcher_targets();
+    window->start_server_status_monitor(server_targets);
+
     window->show();
 
     return std::make_unique<GuiUi>(std::move(window));

@@ -1,0 +1,107 @@
+<Layout width="960">
+  <Class rule="page" padding="24,24" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="22" font_weight="600" margin="0,0,8,0" />
+  <Class rule="section" color="#111827" font_size="16" font_weight="600" margin="0,0,0,0" />
+  <Class rule="body" color="#4b5563" font_size="14" margin="0,0,10,0" />
+  <Class rule="mono" color="#374151" font_size="13" margin="0,0,8,0" />
+  <Class rule="field-label" color="#111827" font_size="12" font_weight="600" margin="0,0,0,0" />
+  <Class rule="input" height="32" border_color="#c8c8c8" bg_color="#ffffff" font_size="14" focus_border_color="#59bfff" radius="6" />
+  <Class rule="range" height="32" margin="0,0,8,0" border_color="#c8c8c8" bg_color="#ffffff" radius="6" />
+  <Class rule="btn-primary" height="38" margin="0,0,8,0" bg_color="#59bfff" hover_bg_color="#4aaef0" color="#0d1117" hover_color="#0d1117" font_weight="600" radius="6" />
+  <Class rule="btn-secondary" height="38" margin="0,0,8,0" bg_color="#ffffff" hover_bg_color="#e5e7eb" color="#374151" hover_color="#111827" font_weight="600" radius="6" border_color="#c8c8c8" />
+  <Class rule="btn-small" height="30" margin="0,0,8,0" bg_color="transparent" hover_bg_color="#e5e7eb" color="#374151" hover_color="#111827" font_size="13" font_weight="600" radius="6" />
+  <Class rule="radio-group" margin="0,0,8,0" />
+  <Class rule="radio" color="#111827" font_size="14" />
+  <Div class="page">
+    <Text class="title">XML UI reference</Text>
+    <Text class="body">Declarative UI for OGG admin and client screens. Styles come from Class rules; global widths are set in Appearance and exported via appsettings.json.</Text>
+
+    <H2 class="section">Default widths (Appearance)</H2>
+    <Text class="mono">Input / Select / Range — 320px (ui_control_width)</Text>
+    <Text class="mono">Button — 140px (ui_button_width)</Text>
+    <Text class="mono">Btn / SmallButton — 80px (ui_small_button_width)</Text>
+    <Text class="mono">label_control_gap — space below Label before the next control (px)</Text>
+    <Text class="body">Unless a Class sets an explicit width attribute, controls use these defaults. Input text insets default to L0 R0 T4 B0.</Text>
+
+    <H2 class="section">Live preview</H2>
+    <Text class="body">Preview uses your current Appearance and Typography settings.</Text>
+    <Label class="field-label">Input (320px default)</Label>
+    <Input id="docs_preview_input" class="input" placeholder="Type here" />
+    <Label class="field-label">Select (320px, options=fonts)</Label>
+    <Select id="docs_preview_select" class="input" options="fonts" />
+    <Label class="field-label">Range (320px, min/max/value)</Label>
+    <Range id="docs_preview_range" class="range" min="0" max="20" value="8" />
+    <Label class="field-label">Button (140px default)</Label>
+    <Button id="docs_preview_button" class="btn-primary">Primary button</Button>
+    <Label class="field-label">Secondary button (same size)</Label>
+    <Button id="docs_preview_button_secondary" class="btn-secondary">Secondary button</Button>
+    <Label class="field-label">Btn (80px default)</Label>
+    <Btn id="docs_preview_btn" class="btn-small">Compact Btn</Btn>
+    <Label class="field-label">RadioGroup</Label>
+    <RadioGroup id="docs_preview_radio" class="radio-group" value="a">
+      <Radio class="radio" value="a">Option A</Radio>
+      <Radio class="radio" value="b">Option B</Radio>
+    </RadioGroup>
+
+    <H2 class="section">Structure</H2>
+    <Text class="mono">Layout — root container; width sets design width for layout.</Text>
+    <Text class="mono">Div — vertical stack of children with optional class padding.</Text>
+    <Text class="mono">Row — horizontal row (e.g. Input + Button on one line).</Text>
+    <Text class="mono">Class rule="name" — shared style: padding, margin, colors, height, width, radius, font_size, font_weight, border_color, bg_color, hover_*.</Text>
+    <Text class="body">Transparent bg: omit bg_color or set bg_color="transparent". Hover fill only when hover_bg_color is set.</Text>
+
+    <H2 class="section">Text</H2>
+    <Text class="mono">Text — body copy; uses label font size from Typography.</Text>
+    <Text class="mono">Label — field caption above inputs.</Text>
+    <Text class="mono">H1 — 2x label size. H2 — 1.5x. H3 — 1.25x.</Text>
+
+    <H2 class="section">Inputs</H2>
+    <Text class="mono">Input id="..." class="..." placeholder="..." type="password"</Text>
+    <Text class="mono">TextArea id="..." class="..." rows="4" — multiline edit; height = rows x line height + insets + border.</Text>
+    <Text class="body">Native Win32 edit with D2D chrome. Insets from Appearance apply to the text area inside the box.</Text>
+    <Text class="mono">Select options="fonts" — dropdown of system fonts (Windows).</Text>
+    <Text class="mono">Range min="0" max="100" value="50" — numeric field with up/down arrows; fires range handler on change.</Text>
+    <Text class="mono">Slider — legacy trackbar (prefer Range).</Text>
+
+    <H2 class="section">Actions</H2>
+    <Text class="mono">Button class="btn-primary" — primary action (default 140px).</Text>
+    <Text class="mono">Button class="btn-secondary" — same size and shape; only fill/border colors differ.</Text>
+    <Text class="mono">Btn — compact 80px control (alias SmallButton).</Text>
+    <Text class="body">Tab bar: tab_margin_left = underline start; tab_pad_left = text inset from underline.</Text>
+
+    <H2 class="section">Choice</H2>
+    <Text class="mono">RadioGroup id="..." value="option" — single selection group.</Text>
+    <Text class="mono">Radio value="option" — one choice; drawn as a radio circle with label.</Text>
+
+    <H2 class="section">Media</H2>
+    <Text class="mono">Gallery columns="3" — grid of Image children.</Text>
+    <Text class="mono">Image id="..." src="path" selected="true|false" — clickable thumbnail; selected shows a radio marker.</Text>
+
+    <H2 class="section">AI endpoints</H2>
+    <Text class="body">Model lists use GET unless noted. Image/video generation uses the active provider from Settings → AI.</Text>
+
+    <Text class="mono">OpenAI — list models</Text>
+    <Text class="body">GET https://api.openai.com/v1/models — Authorization: Bearer key. Used for Validate OpenAI and Refresh OpenAI video models (filters ids containing "sora").</Text>
+
+    <Text class="mono">OpenAI — image generation</Text>
+    <Text class="body">POST https://api.openai.com/v1/images/generations — JSON: model, prompt, n, size, quality. Response b64_json. Used by Assets → Login Images and Assets → Images.</Text>
+
+    <Text class="mono">OpenAI — video generation</Text>
+    <Text class="body">POST https://api.openai.com/v1/videos — multipart: prompt, model, size, seconds. Poll GET /v1/videos/{id} until status=completed, then GET /v1/videos/{id}/content for MP4. Used by Assets → Videos.</Text>
+
+    <Text class="mono">Gemini — list models</Text>
+    <Text class="body">GET https://generativelanguage.googleapis.com/v1beta/models — x-goog-api-key header. Image models: generateContent or predict. Video models: generateVideos or Veo ids. Cached until key changes or Refresh.</Text>
+
+    <Text class="mono">Gemini — image (Imagen)</Text>
+    <Text class="body">POST /v1beta/models/{model}:predict — JSON instances prompt + parameters sampleCount/aspectRatio.</Text>
+
+    <Text class="mono">Gemini — image (flash-image)</Text>
+    <Text class="body">POST /v1beta/models/{model}:generateContent — generationConfig.responseModalities TEXT,IMAGE.</Text>
+
+    <Text class="mono">Gemini — video (Veo)</Text>
+    <Text class="body">POST /v1beta/models/{model}:generateVideos — JSON prompt + config aspectRatio/resolution. Poll GET /v1beta/{operation} until done, then download video URI. Used by Assets → Videos.</Text>
+
+    <H2 class="section">Scrolling</H2>
+    <Text class="body">Long pages scroll with the mouse wheel (ui_scroll_step px per notch). Native controls reposition with scroll.</Text>
+  </Div>
+</Layout>

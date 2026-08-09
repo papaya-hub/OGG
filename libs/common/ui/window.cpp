@@ -22,6 +22,16 @@ RECT monitor_rect_at_cursor() {
     return info.rcMonitor;
 }
 
+RECT monitor_work_area_at_cursor() {
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    GetMonitorInfoW(monitor, &info);
+    return info.rcWork;
+}
+
 WindowPlacement placement_on_monitor(RECT monitor, const WindowSizePolicy& policy) {
     const int screen_w = monitor.right - monitor.left;
     const int screen_h = monitor.bottom - monitor.top;
@@ -30,6 +40,17 @@ WindowPlacement placement_on_monitor(RECT monitor, const WindowSizePolicy& polic
     place.height = static_cast<int>(screen_h * policy.height_ratio);
     place.x = monitor.left + static_cast<int>(screen_w * policy.margin_left_ratio);
     place.y = monitor.top + static_cast<int>(screen_h * policy.margin_top_ratio);
+    return place;
+}
+
+WindowPlacement placement_on_work_area(RECT work_area, const WindowSizePolicy& policy) {
+    const int area_w = work_area.right - work_area.left;
+    const int area_h = work_area.bottom - work_area.top;
+    WindowPlacement place;
+    place.width = static_cast<int>(area_w * policy.width_ratio);
+    place.height = static_cast<int>(area_h * policy.height_ratio);
+    place.x = work_area.left + static_cast<int>(area_w * policy.margin_left_ratio);
+    place.y = work_area.top + static_cast<int>(area_h * policy.margin_top_ratio);
     return place;
 }
 

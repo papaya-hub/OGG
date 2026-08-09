@@ -1,14 +1,14 @@
 <Layout width="320">
-  <Class rule="login-panel" width="320" padding="32,28" bg_color="#ffffff" />
-  <Class rule="heading" color="#1a1a1a" font_size="20" font_weight="600" margin="0,0,4,0" />
-  <Class rule="subtext" color="#5a5a5a" font_size="14" margin="0,0,16,0" />
+  <Class rule="login-panel" width="320" padding="32,32" bg_color="#ffffff" />
+  <Class rule="heading" color="#1a1a1a" font_weight="600" margin="0,0,4,0" />
+  <Class rule="subtext" color="#5a5a5a" margin="0,0,16,0" />
   <Class rule="field" margin="0,0,12,0" />
-  <Class rule="field-label" color="#333333" font_size="12" font_weight="600" margin="0,0,6,0" />
-  <Class rule="input" height="36" padding="0,12" border_color="#c8c8c8" bg_color="#ffffff" font_size="14" focus_border_color="#59bfff" />
-  <Class rule="btn-primary" height="38" margin="8,0,0,0" bg_color="#59bfff" hover_bg_color="#4aaef0" color="#0d1117" hover_color="#0d1117" font_size="14" font_weight="600" radius="6" />
+  <Class rule="field-label" color="#333333" font_weight="600" margin="0,0,0,0" />
+  <Class rule="input" height="32" border_color="#c8c8c8" bg_color="#ffffff" focus_border_color="#59bfff" radius="6" />
+  <Class rule="btn-primary" height="36" margin="8,0,0,0" bg_color="#59bfff" hover_bg_color="#4aaef0" color="#0d1117" hover_color="#0d1117" font_weight="600" radius="6" />
 
   <Div class="login-panel">
-    <Text class="heading">Sign in</Text>
+    <H1 class="heading">Sign in</H1>
     <Text class="subtext">Welcome to OffGrid Games. Enter your credentials to continue.</Text>
     <Div class="field">
       <Label class="field-label">Email</Label>

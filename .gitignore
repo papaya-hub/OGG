@@ -3,6 +3,13 @@ bin
 obj
 dist
 src/OffGridGamer.OffGridGames.Launcher/icon.ico
+src/OffGridGamer.OffGridGames.Client/login_images/
+src/OffGridGamer.OffGridGames.Client/selected_login_image.txt
+
+# Local settings (canonical copy lives in %LOCALAPPDATA%/OffGridGames/appsettings.json)
+config/appsettings.json
+config/primary_color.txt
+config/secondary_color.txt
 
 # local test / agent output
 launcher-out.txt

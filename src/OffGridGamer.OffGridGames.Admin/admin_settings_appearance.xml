@@ -1,0 +1,46 @@
+<Layout width="960">
+  <Class rule="page" padding="24,24" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="22" font_weight="600" margin="0,0,8,0" />
+  <Class rule="body" color="#4b5563" font_size="14" margin="0,0,12,0" />
+  <Class rule="field-label" color="#111827" font_size="12" font_weight="600" margin="0,0,0,0" />
+  <Class rule="input" height="32" border_color="#c8c8c8" bg_color="#ffffff" font_size="14" focus_border_color="#59bfff" radius="6" />
+  <Class rule="range" height="32" margin="0,0,8,0" border_color="#c8c8c8" bg_color="#ffffff" radius="6" />
+  <Class rule="btn-primary" height="38" margin="8,0,0,0" bg_color="#59bfff" hover_bg_color="#4aaef0" color="#0d1117" hover_color="#0d1117" font_weight="600" radius="6" />
+  <Div class="page">
+    <Text class="title">Appearance</Text>
+    <Text class="body">Saved to %LOCALAPPDATA%\OffGridGames\appsettings.json. make client syncs theme into build/generated for the client exe.</Text>
+    <Label class="field-label">Primary color</Label>
+    <Input id="primary_color" class="input" placeholder="#59bfff" />
+    <Label class="field-label">Secondary color</Label>
+    <Input id="secondary_color" class="input" placeholder="#4b5563" />
+    <Label class="field-label">Input width (px) — Input, Select, Range</Label>
+    <Range id="ui_control_width" class="range" min="80" max="480" value="320" />
+    <Label class="field-label">Button width (px) — Button</Label>
+    <Range id="ui_button_width" class="range" min="80" max="480" value="140" />
+    <Label class="field-label">Btn width (px) — Btn / SmallButton</Label>
+    <Range id="ui_small_button_width" class="range" min="48" max="240" value="80" />
+    <Label class="field-label">Tab bar left margin (px) — underline start</Label>
+    <Range id="tab_margin_left" class="range" min="0" max="64" value="24" />
+    <Label class="field-label">Tab bar text padding (px) — text inset from underline</Label>
+    <Range id="tab_pad_left" class="range" min="0" max="32" value="8" />
+    <Label class="field-label">Label–control gap (px)</Label>
+    <Range id="label_control_gap" class="range" min="0" max="32" value="6" />
+    <Label class="field-label">Scroll wheel step (px per notch)</Label>
+    <Range id="ui_scroll_step" class="range" min="1" max="32" value="25" />
+    <Label class="field-label">Source dev dir</Label>
+    <Text class="body">Repo root for Dashboard make buttons (default: parent of build/ when admin runs from build/).</Text>
+    <Input id="source_dev_dir" class="input" placeholder="C:/path/to/OGG" />
+    <Text class="title">Input text insets (px)</Text>
+    <Label class="field-label">Left</Label>
+    <Range id="inset_left" class="range" min="0" max="24" value="0" />
+    <Label class="field-label">Right</Label>
+    <Range id="inset_right" class="range" min="0" max="24" value="0" />
+    <Label class="field-label">Top</Label>
+    <Range id="inset_top" class="range" min="0" max="24" value="4" />
+    <Label class="field-label">Bottom</Label>
+    <Range id="inset_bottom" class="range" min="0" max="24" value="0" />
+    <Label class="field-label">Preview</Label>
+    <Input id="inset_preview" class="input" placeholder="Type here to preview insets" />
+    <Button id="btn_save_appearance" class="btn-primary">Save appearance</Button>
+  </Div>
+</Layout>

@@ -13,9 +13,66 @@
 #include "version.hpp"
 #include "http_client.hpp"
 
+#if defined(__has_include)
+#if __has_include("input_insets.hpp")
+#include "input_insets.hpp"
+#define OGG_HAS_INPUT_INSETS 1
+#endif
+#if __has_include("ui_typography.hpp")
+#include "ui_typography.hpp"
+#define OGG_HAS_UI_TYPOGRAPHY 1
+#endif
+#endif
+
 namespace ogg::client {
 
 namespace {
+
+ogg::ui::InputInsets load_login_input_insets() {
+    ogg::ui::InputInsets insets{};
+#if defined(OGG_HAS_INPUT_INSETS)
+    insets.left = ogg::ui::theme::input_inset_left();
+    insets.right = ogg::ui::theme::input_inset_right();
+    insets.top = ogg::ui::theme::input_inset_top();
+    insets.bottom = ogg::ui::theme::input_inset_bottom();
+#endif
+    return insets;
+}
+
+ogg::ui::UiTypography load_login_typography() {
+    ogg::ui::UiTypography typography{};
+#if defined(OGG_HAS_UI_TYPOGRAPHY)
+    typography.font_family = ogg::ui::theme::ui_font_family();
+    typography.label_font_size = ogg::ui::theme::label_font_size();
+    typography.input_font_size = ogg::ui::theme::input_font_size();
+    typography.button_font_size = ogg::ui::theme::button_font_size();
+#endif
+    return typography;
+}
+
+float load_login_control_width() {
+#if defined(OGG_HAS_UI_TYPOGRAPHY)
+    return static_cast<float>(ogg::ui::theme::ui_control_width());
+#else
+    return 160.f;
+#endif
+}
+
+float load_login_label_control_gap() {
+#if defined(OGG_HAS_UI_TYPOGRAPHY)
+    return static_cast<float>(ogg::ui::theme::label_control_gap());
+#else
+    return 6.f;
+#endif
+}
+
+float load_login_scroll_wheel_step() {
+#if defined(OGG_HAS_UI_TYPOGRAPHY)
+    return static_cast<float>(ogg::ui::theme::ui_scroll_step());
+#else
+    return 4.f;
+#endif
+}
 
 std::string wide_to_utf8(const std::wstring& text) {
     if (text.empty()) return {};
@@ -95,6 +152,11 @@ int run_gui_with_url(const std::wstring& url) {
     window->view().progress = -1;
     window->show();
 
+    window->set_login_input_insets(load_login_input_insets());
+    window->set_login_typography(load_login_typography());
+    window->set_login_control_width(load_login_control_width());
+    window->set_login_label_control_gap(load_login_label_control_gap());
+    window->set_login_scroll_wheel_step(load_login_scroll_wheel_step());
     const std::string login_xml = read_login_xml();
     if (!window->ensure_client_login_panel(login_xml.c_str())) {
         MessageBoxW(nullptr, L"Failed to load native login UI.", L"OGG Client", MB_ICONERROR);
@@ -109,7 +171,11 @@ int run_gui_with_url(const std::wstring& url) {
     window->layout_client_shell();
 
     MSG msg{};
+    const HWND shell_hwnd = window->hwnd();
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (shell_hwnd && IsDialogMessageW(shell_hwnd, &msg)) {
+            continue;
+        }
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }

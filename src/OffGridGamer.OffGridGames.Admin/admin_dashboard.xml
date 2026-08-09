@@ -1,0 +1,35 @@
+<Layout width="960">
+  <Class rule="page" padding="32,28" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="28" font_weight="600" margin="0,0,8,0" />
+  <Class rule="subtitle" color="#4b5563" font_size="15" margin="0,0,24,0" />
+  <Class rule="card" padding="20,20" bg_color="#ffffff" radius="10" margin="0,0,16,0" />
+  <Class rule="card-title" color="#111827" font_size="16" font_weight="600" margin="0,0,8,0" />
+  <Class rule="card-body" color="#4b5563" font_size="14" margin="0,0,12,0" />
+  <Class rule="btn-row" margin="0,0,0,0" />
+  <Class rule="btn-secondary" height="38" margin="0,0,0,0" bg_color="#ffffff" hover_bg_color="#e5e7eb" color="#374151" hover_color="#111827" font_weight="600" radius="6" border_color="#c8c8c8" />
+  <Div class="page">
+    <Text class="title">Dashboard</Text>
+    <Text class="subtitle">Overview of OffGrid Games client assets and releases.</Text>
+    <Div class="card">
+      <Text class="card-title">Builds</Text>
+      <Text id="build_version" class="card-body">Version: —</Text>
+      <Text id="build_source_dir" class="card-body">Source dev dir: —</Text>
+      <Text class="card-body">Runs make in a separate console (Settings → Appearance → Source dev dir).</Text>
+      <Row class="btn-row">
+        <Button id="btn_make_version" class="btn-secondary">make version</Button>
+        <Button id="btn_make_server" class="btn-secondary">make server</Button>
+        <Button id="btn_make_client" class="btn-secondary">make client</Button>
+        <Button id="btn_make_launcher" class="btn-secondary">make launcher</Button>
+      </Row>
+    </Div>
+    <Div class="card">
+      <Text class="card-title">Client build</Text>
+      <Text class="card-body">Use Assets to choose the login hero image embedded by make client.</Text>
+    </Div>
+    <Div class="card">
+      <Text class="card-title">Login images</Text>
+      <Text class="card-body">Generate AI art or pick from the gallery under Assets → Login Images.</Text>
+      <Button id="btn_go_login_images" class="btn-secondary">Go there</Button>
+    </Div>
+  </Div>
+</Layout>

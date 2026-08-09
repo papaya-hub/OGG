@@ -14,6 +14,9 @@
 #include "window.hpp"
 #include "xml_ui.hpp"
 #include "client_shell.hpp"
+#include "server_monitor.hpp"
+
+#include <vector>
 
 namespace ogg::ui {
 
@@ -28,6 +31,7 @@ constexpr UINT kMsgSetStatus = WM_APP + 10;
 constexpr UINT kMsgSetProgress = WM_APP + 11;
 constexpr UINT kMsgShowButtons = WM_APP + 12;
 constexpr UINT kMsgSetEllipsis = WM_APP + 13;
+constexpr UINT kMsgServerMonitorChanged = WM_APP + 14;
 
 class ShellWindow {
 public:
@@ -70,13 +74,24 @@ public:
 
     void set_action_buttons(const ShellButton* buttons, int count);
     bool ensure_client_login_panel(const char* xml);
+    void set_login_input_insets(InputInsets insets);
+    void set_login_typography(UiTypography typography);
+    void set_login_control_width(float width);
+    void set_login_label_control_gap(float gap);
+    void set_login_scroll_wheel_step(float step);
     void ensure_client_chrome_overlay();
     void layout_client_shell();
     void ensure_client_version_overlay(const std::wstring& version_text);
     void bring_client_overlays_to_front();
     void set_status_font(const wchar_t* family, float size_pt);
+    void start_server_status_monitor(const std::vector<ogg::server_monitor::Target>& targets);
+    void stop_server_status_monitor();
 
 private:
+    static constexpr UINT_PTR kBadgeTimerId = 3;
+    static constexpr UINT kBadgeTimerMs = 500;
+
+    void refresh_server_badges();
     static bool register_hero_overlay_class();
     static bool register_version_overlay_class();
     static LRESULT CALLBACK hero_overlay_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -88,6 +103,8 @@ private:
     void layout_version_overlay();
     void paint_hero_panel(HDC hdc, const RECT& rc);
     void paint_client_version(HDC hdc, const RECT& rc);
+    static void on_server_monitor_changed(void* user_data);
+
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
     void invalidate();
     void on_paint();
@@ -106,6 +123,8 @@ private:
     XmlUiHost login_ui_{};
     HWND version_overlay_ = nullptr;
     std::wstring version_overlay_text_;
+    ogg::server_monitor::Monitor server_monitor_;
+    bool server_monitor_active_ = false;
 };
 
 } // namespace ogg::ui

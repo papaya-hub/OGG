@@ -1,0 +1,13 @@
+<Layout width="960">
+  <Class rule="page" padding="24,24" bg_color="#f4f6f8" />
+  <Class rule="title" color="#111827" font_size="22" font_weight="600" margin="0,0,8,0" />
+  <Class rule="body" color="#4b5563" font_size="14" margin="0,0,16,0" />
+  <Class rule="card" padding="20,20" bg_color="#ffffff" radius="10" />
+  <Div class="page">
+    <Text class="title">General asset settings</Text>
+    <Text class="body">Login hero images live in %LOCALAPPDATA%\OffGridGames\login_images. Selection is in appsettings.json and synced on make client.</Text>
+    <Div class="card">
+      <Text class="body">Selected image filename is stored in AppData and copied to hero_art.jpg before client embed.</Text>
+    </Div>
+  </Div>
+</Layout>

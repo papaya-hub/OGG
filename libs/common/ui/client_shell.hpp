@@ -18,12 +18,17 @@ namespace ogg::ui::client_shell {
 // - Left login panel (XML UI) at fixed width
 // - Right hero/content panel
 // - Transparent top-right minimize/close chrome (glyph offset -4px)
-// - Position-based window drag (hero anywhere; login empty space via HTTRANSPARENT)
+// - Invisible drag band (40px) or full-window drag when client_drag_full_window is set
 struct LayoutSpec {
     static constexpr float kLoginPanelWidth = kClientLoginPanelWidth;
+    static constexpr float kDragBandHeight = kClientDragBandHeight;
     static constexpr float kChromeHeight = kClientChromeHeight;
     static constexpr float kChromeBtnYOffset = kClientChromeBtnYOffset;
     static constexpr float kChromeButtonWidth = kTitleCloseBtnW;
+};
+
+struct DragOptions {
+    bool full_window = false;
 };
 
 struct PanelLayout {
@@ -43,8 +48,8 @@ struct PanelLayout {
 
 PanelLayout measure_panels(int shell_width, int shell_height);
 
-// True when the shell should return HTCAPTION for borderless drag (excludes chrome buttons).
-bool allows_window_drag(POINT pt_client, float shell_width);
+// True when the shell should return HTCAPTION (excludes chrome buttons; band-limited unless full_window).
+bool allows_window_drag(POINT pt_client, float shell_width, DragOptions options = {});
 
 class ChromeOverlay {
 public:
@@ -56,7 +61,6 @@ public:
     void destroy();
     void layout(int shell_width);
     void set_theme(ShellTheme theme) { theme_ = theme; }
-    void set_repair_target(HWND hero_overlay) { repair_target_ = hero_overlay; }
 
     HWND hwnd() const { return hwnd_; }
 
@@ -64,12 +68,11 @@ private:
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
     void paint(HDC hdc, const RECT& rc);
+    void present_layered();
     void update_hover(POINT pt);
-    void invalidate_repair_region();
 
     HWND parent_ = nullptr;
     HWND hwnd_ = nullptr;
-    HWND repair_target_ = nullptr;
     void* user_data_ = nullptr;
     ActionHandler on_close_ = nullptr;
     ActionHandler on_minimize_ = nullptr;

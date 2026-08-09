@@ -3,6 +3,7 @@
 #if defined(_WIN32)
 
 #include <string>
+#include <vector>
 
 #include <d2d1.h>
 
@@ -19,6 +20,7 @@ constexpr float kVersionOverlayHeight = 18.f;
 constexpr float kVersionOverlayMargin = 8.f;
 constexpr float kVersionOverlayMinWidth = 96.f;
 constexpr float kClientLoginPanelWidth = 320.f;
+constexpr float kClientDragBandHeight = 40.f;
 constexpr float kClientChromeHeight = kTitleCloseBtnH;
 constexpr float kClientChromeBtnYOffset = kChromeBtnYOffset;
 constexpr float kProgressBarHeight = 2.f;
@@ -41,10 +43,19 @@ struct ShellView {
     int status_ellipsis = 0;
     bool show_buttons = false;
     bool minimal_chrome = false;
+    bool client_drag_full_window = false;
     bool hover_title_close = false;
     ShellButton buttons[2]{};
     int button_count = 0;
+    bool server_badge_blink_bright = false;
+    std::vector<std::wstring> server_badge_labels;
+    std::vector<bool> server_badge_up;
+    std::vector<bool> server_badge_polling;
+    std::vector<bool> server_badge_checking;
+    std::vector<bool> server_badge_local;
 };
+
+int hit_server_badge_index(const ShellView& view, float width, POINT pt);
 
 D2D1_RECT_F title_close_rect(float width);
 D2D1_RECT_F chrome_overlay_minimize_rect();
