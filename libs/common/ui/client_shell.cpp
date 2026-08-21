@@ -257,6 +257,13 @@ void ChromeOverlay::present_layered() {
     }
 
     HGDIOBJ old_bmp = SelectObject(mem_dc, dib);
+    // Layered windows use per-pixel alpha for hit testing. Keep the chrome
+    // visually transparent while making the complete button rectangles
+    // reliably clickable, rather than only the opaque glyph pixels.
+    auto* pixels = static_cast<unsigned char*>(bits);
+    for (int pixel = 0; pixel < w * h; ++pixel) {
+        pixels[pixel * 4 + 3] = 1;
+    }
     paint(mem_dc, client_rc);
     fix_bitmap_alpha(bits, w * h);
 

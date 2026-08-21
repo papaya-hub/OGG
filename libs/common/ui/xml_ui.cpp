@@ -1024,6 +1024,8 @@ void layout_row(XmlUiState& state, UiNode& row, float x, float y, float width) {
     if (buttons_w > 0.f) buttons_w -= kRowGap;
 
     float field_w = field_count > 0 ? (content_w - buttons_w) / static_cast<float>(field_count) : 0.f;
+    const float configured_field_w = state.control_width > 0.f ? state.control_width : 320.f;
+    field_w = std::min(field_w, configured_field_w);
     if (field_w < 80.f) field_w = 80.f;
 
     float row_content_h = 0.f;
@@ -1258,6 +1260,16 @@ LRESULT CALLBACK input_edit_subclass(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
         if (parent) InvalidateRect(parent, nullptr, FALSE);
     }
     return result;
+}
+
+LRESULT CALLBACK select_subclass(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR ref_data) {
+    (void)id;
+    (void)ref_data;
+    if (msg == WM_MOUSEWHEEL && GetFocus() != hwnd) {
+        HWND parent = GetParent(hwnd);
+        if (parent) return SendMessageW(parent, msg, wparam, lparam);
+    }
+    return DefSubclassProc(hwnd, msg, wparam, lparam);
 }
 
 std::wstring image_path_wide(const std::string& path) {
@@ -1744,7 +1756,10 @@ void destroy_inputs(XmlUiState& state) {
     }
     state.ranges.clear();
     for (auto& select : state.selects) {
-        if (select.hwnd) DestroyWindow(select.hwnd);
+        if (select.hwnd) {
+            RemoveWindowSubclass(select.hwnd, select_subclass, 0);
+            DestroyWindow(select.hwnd);
+        }
     }
     state.selects.clear();
     for (auto& slider : state.sliders) {
@@ -1932,6 +1947,7 @@ void create_inputs(XmlUiState& state, HWND parent) {
                     nullptr
                 );
                 if (control.hwnd) {
+                    SetWindowSubclass(control.hwnd, select_subclass, 0, 0);
                     if (node.select_fonts) {
                         const std::vector<std::wstring>& font_list = system_fonts();
                         for (const auto& font : font_list) {
@@ -2533,6 +2549,7 @@ LRESULT CALLBACK XmlUiHost::window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPAR
         return 0;
 
     case WM_LBUTTONDOWN: {
+        SetFocus(hwnd);
         POINT pt{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
         const POINT content_pt = content_point(pt, state.scroll_y);
         for (const auto& input : state.inputs) {
